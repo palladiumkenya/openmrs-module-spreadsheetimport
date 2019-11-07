@@ -13,33 +13,23 @@
  */
 package org.openmrs.module.spreadsheetimport.web.controller;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.spreadsheetimport.DbImportUtil;
 import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplate;
-import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplateColumn;
-import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplateColumnPrespecifiedValue;
-import org.openmrs.module.spreadsheetimport.SpreadsheetImportUtil;
-import org.openmrs.module.spreadsheetimport.UniqueImport;
 import org.openmrs.module.spreadsheetimport.service.SpreadsheetImportService;
 import org.openmrs.web.WebConstants;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
-import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -106,9 +96,82 @@ public class SpreadsheetImportImportFormController {
 		if (request.getParameter("rollbackTransaction") == null) {
 			rollbackTransaction = false;
 		}
-		
-		File returnedFile = SpreadsheetImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
-		boolean succeeded = (returnedFile != null);
+
+		Map<String, Integer> tableToTemplateMap = new HashMap<String, Integer>();
+		tableToTemplateMap.put("tr_hiv_enrollment", 8);
+
+		/**
+		 *  attempt nested processing of data
+		 * 	the order should be demographics,
+		 * 	hiv enrollment encounter,
+		 * 	triage encounter,
+		 * 	hiv testing initial encounter
+		 * 	hiv patient program
+		 */
+
+		// custom logic to process patient demographics. the spreadsheet module coe
+		// skips processing of other identifiers and other person related data once
+		// an associated person is found.
+		String successfulProcessMsg = null;
+
+		successfulProcessMsg = DbImportUtil.processDemographicsDataset(messages);
+
+		if (successfulProcessMsg != null) {
+			// step 2: process hiv enrollment encounter
+			template = Context.getService(SpreadsheetImportService.class).getTemplateById(tableToTemplateMap.get("tr_hiv_enrollment"));
+			successfulProcessMsg = DbImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+
+		}
+
+
+		// step 1: set template to demographics
+		//template = Context.getService(SpreadsheetImportService.class).getTemplateById(tableToTemplateMap.get("demographics"));
+		//successfulProcessMsg = DbImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+
+		/*if (successfulProcessMsg != null) {
+			// step 2: process hiv enrollment encounter
+			template = Context.getService(SpreadsheetImportService.class).getTemplateById(tableToTemplateMap.get("hiv_enrollment_encounter"));
+			successfulProcessMsg = DbImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+
+			*//*if (successfulProcessMsg != null) {
+				// step 3: process triage encounter
+				template = Context.getService(SpreadsheetImportService.class).getTemplateById(tableToTemplateMap.get("triage_encounter"));
+				successfulProcessMsg = DbImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+
+				if (successfulProcessMsg != null) {
+					// step 4: process hts initial encounter
+					template = Context.getService(SpreadsheetImportService.class).getTemplateById(tableToTemplateMap.get("hiv_testing_initial_encounter"));
+					successfulProcessMsg = DbImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+
+					if (successfulProcessMsg != null) {
+						// step 5: process hiv patient program
+						template = Context.getService(SpreadsheetImportService.class).getTemplateById(tableToTemplateMap.get("hiv_patient_program"));
+						successfulProcessMsg = DbImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+						if (successfulProcessMsg != null) {
+
+						} else {
+							messages.add("Error processing patient program");
+						}
+
+					} else {
+						messages.add("Error processing HTS initial encounter");
+					}
+
+				} else {
+					messages.add("Error processing triage encounters");
+
+				}
+
+			} else {
+				messages.add("Error processing HIV enrollment encounters");
+
+			}*//*
+
+		} else {
+			messages.add("Error processing patient demographics");
+
+		}*/
+		boolean succeeded = (successfulProcessMsg != null);
 
 		String messageString = "";
 		for (int i = 0; i < messages.size(); i++) {
@@ -118,16 +181,7 @@ public class SpreadsheetImportImportFormController {
 			messageString += messages.get(i);
 		}
 		if (succeeded) {
-			messageString += "Success!";
-			try {	    	
-			      InputStream is = new FileInputStream(returnedFile);
-			      response.setContentType("application/ms-excel");
-			      response.addHeader("content-disposition", "inline;filename=" + returnedFile.getName());
-			      IOUtils.copy(is, response.getOutputStream());			      
-			      response.flushBuffer();
-			    } catch (IOException ex) {
-			      log.info("Error writing file to output stream");
-			    }
+			messageString += "<br />Success!";
 		}
 				
 		if (!messageString.isEmpty()) {

@@ -13,6 +13,11 @@
  */
 package org.openmrs.module.spreadsheetimport;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.spreadsheetimport.objects.NameValue;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -23,8 +28,6 @@ import java.sql.SQLSyntaxErrorException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -34,11 +37,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.openmrs.api.context.Context;
-import org.openmrs.module.spreadsheetimport.objects.NameValue;
 
 /**
  *
@@ -209,11 +207,22 @@ public class DatabaseBackend {
 			rsPrimaryKeys.close();
 			
 			ResultSet rs = null;
-			
-			// Try 0: if table is person, then look for person_name
+
+			// Try if table is person, then look for person_name
 			if ("person".equals(tableName)) {
 				try {
 					rs = s.executeQuery("SELECT CONCAT(given_name, ' ', family_name) name,  `person_name`.`person_id` primary_key FROM  `users` INNER JOIN `person_name` on `users`.`person_id` = `person_name`.`person_id` INNER JOIN `user_role` on `users`.`user_id` = `user_role`.`user_id` WHERE `user_role`.`role` = 'Provider'");
+				}
+				catch (Exception e) {
+					log.debug(e.toString());
+				}
+			}
+
+			// Try if table is concept
+			// concept_name TODO: provide a means to filter only concepts to be used. This slows down page rendering for a large concept dictionary
+			if (rs == null && "concept".equals(tableName)) {
+				try {
+					rs = s.executeQuery("select concept_id, concept_id from concept_name where locale='en' and concept_name_type='FULLY_SPECIFIED' and concept_id in(select distinct concept_id from obs) order by concept_id asc");
 				}
 				catch (Exception e) {
 					log.debug(e.toString());
@@ -335,6 +344,7 @@ public class DatabaseBackend {
 	}
 	
 	public static String importData(Map<UniqueImport, Set<SpreadsheetImportTemplateColumn>> rowData,
+	                              String encounterDate, String patientId,
 	                              boolean rollbackTransaction) throws Exception {
 		Connection conn = null;
 		Statement s = null;
@@ -342,7 +352,6 @@ public class DatabaseBackend {
 		String sql = null;
 		
 		String encounterId = null;
-		
 		try {
 			
 			// Connect to db
@@ -359,17 +368,30 @@ public class DatabaseBackend {
 			s = conn.createStatement();
 			
 			List<String> importedTables = new ArrayList<String>();
-			
+
 			// Import
 			for (UniqueImport uniqueImport : rowData.keySet()) {
-				
+
 				String tableName = uniqueImport.getTableName();
+
+				//System.out.println("Table to process ============> : " + tableName);
+
+				if (tableName.equals("patient_identifier") || tableName.equals("person_name")) {
+					continue;
+				}
 				boolean isEncounter = "encounter".equals(tableName);
 				boolean isPerson = "person".equals(tableName);
 				boolean isPatientIdentifier = "patient_identifier".equals(tableName);
+				boolean isPersonAttribute = "person_attribute".equals(tableName);
 				boolean isObservation = "obs".equals(tableName);
 				
 				boolean skip = false;
+
+
+				/*Set<SpreadsheetImportTemplateColumn> columns = rowData.get(uniqueImport);
+				for (SpreadsheetImportTemplateColumn column : columns) {
+					column.setGeneratedKey(patientId);
+				}*/
 				
 				// SPECIAL TREATMENT
 				// for encounter, if the data is available in the row, it means we're UPDATING observations for an EXISTING encounter, so we don't have to create encounter
@@ -378,7 +400,7 @@ public class DatabaseBackend {
 					Set<SpreadsheetImportTemplateColumn> columnSet = rowData.get(uniqueImport);
 					for (SpreadsheetImportTemplateColumn column : columnSet) {
 						Object columnValue = column.getValue();
-						if (!columnValue.equals("")) {
+						if (!columnValue.equals("") && columnValue != null) {
 							column.setGeneratedKey(columnValue.toString());
 							skip = true;
 							importedTables.add("encounter"); // fake as just imported encounter
@@ -419,18 +441,30 @@ public class DatabaseBackend {
 							String columnName = patientIdentifierColumn.getColumnName();
 							if ("identifier".equals(columnName)) {
 								isIdentifierExist = true;
+
+								String patientIdentifierString = "";
+								if (patientIdentifierColumn.getValue() instanceof Integer) {
+									Integer val = (Integer) patientIdentifierColumn.getValue();
+									patientIdentifierString = String.valueOf(val.intValue());
+								} else if (patientIdentifierColumn.getValue() instanceof Double) {
+									Double val = (Double) patientIdentifierColumn.getValue();
+									patientIdentifierString = String.valueOf(val.intValue());
+								} else {
+									patientIdentifierString = patientIdentifierColumn.getValue().toString();
+								}
 								
-								sql = "select patient_id from patient_identifier where identifier = " + patientIdentifierColumn.getValue();
+								sql = "select patient_id from patient_identifier where identifier = " + patientIdentifierString + " and identifier_type=16";
 								
-								System.out.println("Searching for existing patient of id " + patientIdentifierColumn.getValue());
+								System.out.println("Searching for existing patient of id " + patientIdentifierString);
 								
 								ResultSet rs = s.executeQuery(sql);
 								if (rs.next()) {
-									String patientId = rs.getString(1);
+									patientId = rs.getString(1);
 									
 									System.out.println("Found patient with patient_id = " + patientId);
-									
+
 									// no need to insert person, use the found patient_id as person_id
+									// TODO: can this be modified to allow for inserting multiple identifiers?
 									Set<SpreadsheetImportTemplateColumn> columnSet = rowData.get(uniqueImport);
 									for (SpreadsheetImportTemplateColumn column : columnSet) {
 										column.setGeneratedKey(patientId);
@@ -487,14 +521,14 @@ public class DatabaseBackend {
 						
 											
 						// find matching person name
-						sql = "select person.person_id from person_name join person where gender " + (gender == null ? "is NULL" : "= " + gender) + " and birthdate " + (birthdate == null ? "is NULL" : "= " + birthdate) + " and given_name " + (givenName == null ? "is NULL" : "= " + givenName) + " and family_name " + (familyName == null ? "is NULL" : "= " + familyName) + " and middle_name " + (middleName == null ? "is NULL" : "= " + middleName);
+						sql = "select person.person_id from person_name join person where gender " + (gender == null || gender.equals("") ? "is NULL" : "= " + gender) + " and birthdate " + (birthdate == null || birthdate.equals("") ? "is NULL" : "= " + birthdate) + " and given_name " + (givenName == null || givenName.equals("") ? "is NULL" : "= " + givenName) + " and family_name " + (familyName == null || familyName.equals("") ? "is NULL" : "= " + familyName) + " and middle_name " + (middleName == null || middleName.equals("") ? "is NULL" : "= " + middleName);
 						ResultSet rs = s.executeQuery(sql);
 						String personId = null;
 						if (rs.next()) {
 							// matched => no need to insert person, use the found patient_id as person_id
 							Set<SpreadsheetImportTemplateColumn> columnSet = rowData.get(uniqueImport);
 							for (SpreadsheetImportTemplateColumn column : columnSet) {
-								column.setGeneratedKey(personId);
+								column.setGeneratedKey(personId);// TODO: check to see if this will not always be NULL. It hasn't been set anywhere
 							}
 
 							importedTables.add("person"); // fake as just imported person
@@ -533,22 +567,30 @@ public class DatabaseBackend {
 						// find encounter_datetime based on observation date time
 						java.sql.Date encounterDatetime = new java.sql.Date(System.currentTimeMillis());
 						Set<UniqueImport> uniqueImports = rowData.keySet();
-						for (UniqueImport u : uniqueImports) {
-							if ("obs".equals(u.getTableName())) {
-								Set<SpreadsheetImportTemplateColumn> obsColumns = rowData.get(u);
-								for (SpreadsheetImportTemplateColumn obsColumn : obsColumns) {
-									if ("obs_datetime".equals(obsColumn.getColumnName())) {
-										String obsColumnValue = obsColumn.getValue().toString();
-										obsColumnValue = obsColumnValue.substring(1, obsColumnValue.length()-1);
-										Date obsColumnValueDate = java.sql.Date.valueOf(obsColumnValue);
-										if (obsColumnValueDate.before(encounterDatetime))
-											encounterDatetime = obsColumnValueDate;
+
+						if (encounterDate != null && !encounterDate.equals("")) {
+							columnNames += ", encounter_datetime";
+							columnValues += ",'" + encounterDate + "'";
+						} else {
+							for (UniqueImport u : uniqueImports) {
+								if ("obs".equals(u.getTableName())) {
+									Set<SpreadsheetImportTemplateColumn> obsColumns = rowData.get(u);
+									for (SpreadsheetImportTemplateColumn obsColumn : obsColumns) {
+										if ("obs_datetime".equals(obsColumn.getColumnName())) {
+											String obsColumnValue = obsColumn.getValue().toString();
+											obsColumnValue = obsColumnValue.substring(1, obsColumnValue.length()-1);
+											Date obsColumnValueDate = java.sql.Date.valueOf(obsColumnValue);
+											if (obsColumnValueDate.before(encounterDatetime))
+												encounterDatetime = obsColumnValueDate;
+										}
 									}
 								}
 							}
+
+							columnNames += ", encounter_datetime";
+							columnValues += ",'" + encounterDatetime.toString() + "'";
 						}
-						columnNames += ", encounter_datetime";
-						columnValues += ",'" + encounterDatetime.toString() + "'";
+
 						
 						isFirst = false;
 						break;
@@ -556,10 +598,21 @@ public class DatabaseBackend {
 					
 					// Check for duplicates
 					if (column.getDisallowDuplicateValue()) {
-						sql = "select " + column.getColumnName() + " from " + column.getTableName() + " where " + column.getColumnName() + " = " + column.getValue();
+						String ColValue = "";
+						if (column.getValue() instanceof Integer) {
+							Integer val = (Integer) column.getValue();
+							ColValue = String.valueOf(val.intValue());
+						} else if (column.getValue() instanceof Double) {
+							Double val = (Double) column.getValue();
+							ColValue = String.valueOf(val.intValue());
+						} else {
+							ColValue = column.getValue().toString();
+						}
+
+						sql = "select " + column.getColumnName() + " from " + column.getTableName() + " where " + column.getColumnName() + " = " + ColValue;
 						if (log.isDebugEnabled()) {
 							log.debug(sql);
-							System.out.println(sql);
+							//System.out.println(sql);
 						}	
 						ResultSet rs = s.executeQuery(sql);
 						boolean foundDuplicate = rs.next();
@@ -591,8 +644,20 @@ public class DatabaseBackend {
 						columnNames += ",";
 						columnValues += ",";					
 					}
-					columnNames += columnPrespecifiedValue.getColumnName();
-					columnValues += columnPrespecifiedValue.getPrespecifiedValue().getValue();					
+
+					if (columnPrespecifiedValue.getColumnName() != null && columnPrespecifiedValue.getColumnName().equals("patient_id")) {
+						columnNames += "patient_id";
+						columnValues += patientId;
+					} else if (columnPrespecifiedValue.getColumnName() != null && columnPrespecifiedValue.getColumnName().equals("person_id")) {
+						columnNames += "person_id";
+						columnValues += patientId;
+					} else {
+						columnNames += columnPrespecifiedValue.getColumnName();
+						columnValues += columnPrespecifiedValue.getPrespecifiedValue().getValue();
+					}
+
+					//System.out.println("Here in add columns: " + columnPrespecifiedValue.getColumnName() + ", " + columnPrespecifiedValue.getPrespecifiedValue().getValue());
+
 				}
 			
 				// Data from columns import before
@@ -619,7 +684,7 @@ public class DatabaseBackend {
 							importedTables.contains("person") &&
 							!importedTables.contains("patient")) {
 
-							sql = "insert into patient (patient_id, creator) values (" + columnGeneratedKey + ", " + Context.getAuthenticatedUser().getId() + ")";
+							sql = "insert into patient (patient_id, creator,date_created) values (" + columnGeneratedKey + ", " + Context.getAuthenticatedUser().getId()+ ", now()" + ")";
 							if (log.isDebugEnabled()) {
 								log.debug(sql);
 							}	
@@ -643,22 +708,28 @@ public class DatabaseBackend {
 						}
 						columnNames += columnName;
 						columnValues += mapPrimaryKeyColumnNameToGeneratedKey.get(columnName);
+
 					}
 					
 				}
 				
 				// SPECIAL TREATMENT: if this is observation, then check for column obs_datetime. If not available, then use current time
 				if (isObservation) {
-					boolean hasDatetime = false;
-					for (SpreadsheetImportTemplateColumn column : columnSet) {
-						if ("obs_datetime".equals(column.getColumnName())) {
-							hasDatetime = true;
-							break;
-						}
-					}
-					if (!hasDatetime) {
+					if (encounterDate != null && !encounterDate.equals("")) {
 						columnNames += ",obs_datetime";
-						columnValues += ",now()";						
+						columnValues += ",'" + encounterDate + "'";
+					} else {
+						boolean hasDatetime = false;
+						for (SpreadsheetImportTemplateColumn column : columnSet) {
+							if ("obs_datetime".equals(column.getColumnName())) {
+								hasDatetime = true;
+								break;
+							}
+						}
+						if (!hasDatetime) {
+							columnNames += ",obs_datetime";
+							columnValues += ",now()";
+						}
 					}
 					columnNames += ", date_created";
 					columnValues += ",now()";
@@ -681,12 +752,64 @@ public class DatabaseBackend {
 					columnNames += ",uuid";
 					columnValues += ",uuid()";
 				}
+				// add date created
+				ResultSet dateCreatedColumn = dmd.getColumns(null, null, uniqueImport.getTableName(), "date_created");
+				if (dateCreatedColumn.next() && !columnNames.contains("date_created")) {
+					columnNames += ",date_created";
+					columnValues += ",now()";
+				}
 				rsColumns.close();
-				
+
+				// attempt to add visit
+				if (isEncounter && patientId != null) {
+					String encStartDatetime = encounterDate.concat(" ").concat("00:00:00");
+					String encEndDatetime = encounterDate.concat(" ").concat("23:59:59");
+					String getVisitQry = "SELECT visit_id from visit where date_started BETWEEN ':startDatetime' and ':endDatetime' and patient_id=:patientID";
+					getVisitQry = getVisitQry.replace(":startDatetime", encStartDatetime);
+					getVisitQry = getVisitQry.replace(":endDatetime", encEndDatetime);
+					getVisitQry = getVisitQry.replace(":patientID", patientId);
+					String existingVisitId = null;
+					//System.out.println("Get visit query: " + getVisitQry);
+
+					ResultSet rs = s.executeQuery(getVisitQry);
+					if (rs.next()) {
+						existingVisitId = rs.getString(1);
+						rs.close();
+					} else {
+						String insertVisitQry = "insert into visit(patient_id, visit_type_id, date_started, date_stopped, creator, date_created, uuid) \n" +
+								"    values(:patientID,1,':dateStarted',':dateStopped',:creator,now(),uuid())";
+						//replace date started string
+						insertVisitQry = insertVisitQry.replace(":patientID", patientId);
+						insertVisitQry = insertVisitQry.replace(":dateStarted", encStartDatetime);
+						insertVisitQry = insertVisitQry.replace(":dateStopped", encEndDatetime);
+						insertVisitQry = insertVisitQry.replace(":creator", Context.getAuthenticatedUser().getId().toString());
+						//System.out.println("Insert visit query: " + insertVisitQry);
+
+						s.executeUpdate(insertVisitQry, Statement.RETURN_GENERATED_KEYS);
+						ResultSet visitRs = s.getGeneratedKeys();
+						visitRs.next();
+						existingVisitId = visitRs.getString(1);
+						visitRs.close();
+
+
+					}
+					if (existingVisitId != null) {
+						//System.out.println("Adding visit columns to query ");
+						columnNames += ",visit_id ";
+						columnValues += "," + existingVisitId + " ";
+					}
+
+				}
+
 				// Insert tableName
 				sql = "insert into " + uniqueImport.getTableName() + " (" + columnNames + ")" + " values ("
 				        + columnValues + ")";
-				System.out.println(sql);
+
+				// attempt to replace 'NULL' with NULL
+				sql = sql.replace("'NULL'", "NULL");
+				//replace empty space with ',NULL,'
+				sql = sql.replace(",,",",NULL,");
+				System.out.println("Query to execute: " + sql);
 				if (log.isDebugEnabled()) {
 					log.debug(sql);					
 				}
@@ -705,9 +828,11 @@ public class DatabaseBackend {
 				importedTables.add(uniqueImport.getTableName());
 			}
 		} catch (SQLSyntaxErrorException e) {
+			e.printStackTrace();
 			throw new SpreadsheetImportSQLSyntaxException(sql, e.getMessage());
 		} catch (Exception e) {
 			log.debug(e.toString());
+			e.printStackTrace();
 			exception = e;
 			throw new SpreadsheetImportSQLSyntaxException(sql, e.getMessage()); // TODO: for web debug purpose only, should comment out later
 		}
@@ -774,15 +899,16 @@ public class DatabaseBackend {
 							
 							// verify the answers are the concepts which are possible answers							
 							//sql = "select answer_concept from concept_answer join concept_name on concept_answer.answer_concept = concept_name.concept_id where concept_name.name = '" + obsColumn.getValue() + "' and concept_answer.concept_id = '" + conceptId + "'";
-							sql = "select answer_concept from concept_answer where answer_concept = '" + obsColumn.getValue() + "' and concept_id = '" + conceptId + "'";
+							//TODO: any concept should be permitted as answer to a question. Commenting the parts below for now
+							/*sql = "select answer_concept from concept_answer where answer_concept = '" + obsColumn.getValue() + "' and concept_id = '" + conceptId + "'";
 							rs = s.executeQuery(sql);
 							if (!rs.next()) {
-								sql = "select name from concept_name where concept_id = " + conceptId;
+								sql = "select name from concept_name where locale='en' and concept_id = " + conceptId;
 								rs = s.executeQuery(sql);
 								rs.next();
 								String conceptName = rs.getString(1);
 								throw new SpreadsheetImportTemplateValidationException("invalid concept answer for the prespecified concept ID " + conceptName);
-							}
+							}*/
 						} else if ("value_text".equals(columnName)) {
 							// skip if empty
 							if (obsColumn.getValue().equals(""))
@@ -795,7 +921,7 @@ public class DatabaseBackend {
 								continue;
 							
 							// verify it's within the range specified in the concept definition
-							sql = "select hi_absolute, low_absolute from concept_numeric where concept_id = '" + conceptId + "'";
+							sql = "select COALESCE (hi_normal, hi_absolute, hi_critical) hi_absolute, low_absolute from concept_numeric where concept_id = '" + conceptId + "'";
 							rs = s.executeQuery(sql);
 							if (!rs.next())
 								throw new SpreadsheetImportTemplateValidationException("prespecified concept ID " + conceptId + " is not a numeric concept");
@@ -807,18 +933,23 @@ public class DatabaseBackend {
 							} catch (NumberFormatException nfe) {
 								throw new SpreadsheetImportTemplateValidationException("concept value is not a number");
 							}
-							if (hiAbsolute < value || lowAbsolute > value)
+							// TODO: find the best way to validate this
+							/*if (hiAbsolute >= 0 && hiAbsolute < value || lowAbsolute >= 0 && lowAbsolute > value) {
+								System.out.println("Range: hiAbsolute: " + hiAbsolute + ", lowAbsolute: " + lowAbsolute);
+								System.out.println("out of range concept: " + conceptId);
 								throw new SpreadsheetImportTemplateValidationException("concept value " + value + " of column " + columnName + " is out of range " + lowAbsolute + " - " + hiAbsolute);
+							}*/
 						} else if ("value_datetime".equals(columnName) || "obs_datetime".equals(columnName)) {
 							// skip if empty
-							if (obsColumn.getValue().equals(""))
+							if (obsColumn.getValue().equals("") || obsColumn.getValue().equals(null) || obsColumn.getValue().equals("null") || obsColumn.getValue().equals("NULL"))
 								continue;
 							
 							// verify datetime is defined and it can not be in the future
 							String value = obsColumn.getValue().toString();
-							String date = value.substring(1, value.length()-1);
-							if (Timestamp.valueOf(date).after(new Timestamp(System.currentTimeMillis())))
-								throw new SpreadsheetImportTemplateValidationException("date is in the future");
+							System.out.println("Date value: " + value);
+							String date = value + " 00:00:00"; // this is required for timestamp
+							/*if (Timestamp.valueOf(value).after(new Timestamp(System.currentTimeMillis())))
+								throw new SpreadsheetImportTemplateValidationException("date is in the future");*/
 						}
 					}
 				} else if ("patient_identifier".equals(uniqueImport.getTableName())) {
@@ -833,18 +964,29 @@ public class DatabaseBackend {
 							 throw new SpreadsheetImportTemplateValidationException("no prespecified patient identifier type ID");
 						
 						sql = "select format from patient_identifier_type where patient_identifier_type_id = " + pitId;
+						//System.out.println("Identifier sql: " + sql);
 						rs = s.executeQuery(sql);
 						if (!rs.next())
-							throw new SpreadsheetImportTemplateValidationException("invalid prespcified patient identifier type ID");
+							throw new SpreadsheetImportTemplateValidationException("invalid prespecified patient identifier type ID");
 						
 						String format = rs.getString(1);
-						if (format != null && format.trim().length() != 0) {
-							String value = piColumn.getValue().toString();
-							value = value.substring(1, value.length()-1);
+						if (format != null && format.trim().length() != 0 && piColumn.getValue() != null && !piColumn.getValue().equals("") ) {
+							// detect if value is numeric and try formatting the cell value to string
+							String value = "";
+							if (piColumn.getValue() instanceof Integer) {
+								Integer val = (Integer) piColumn.getValue();
+								value = String.valueOf(val);
+							} else if (piColumn.getValue() instanceof Double) {
+								Double val = (Double) piColumn.getValue();
+								value = String.valueOf(val.intValue());
+							} else {
+								value = piColumn.getValue().toString();
+							}
 							Pattern pattern = Pattern.compile(format);
 							Matcher matcher = pattern.matcher(value);
-							if (!matcher.matches())
-								throw new SpreadsheetImportTemplateValidationException("Patient ID is not conforming to patient identifier type");						
+							if (!matcher.matches()) {
+								throw new SpreadsheetImportTemplateValidationException("Patient ID does not conform to the specified patient identifier type format");
+							}
 						}
 					}
 				}
