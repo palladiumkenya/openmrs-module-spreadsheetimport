@@ -13,28 +13,48 @@
  */
 package org.openmrs.module.spreadsheetimport;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.sql.ResultSet;
-import java.sql.SQLSyntaxErrorException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.Vector;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.openmrs.Attributable;
+import org.openmrs.Encounter;
+import org.openmrs.GlobalProperty;
+import org.openmrs.Location;
+import org.openmrs.Obs;
+import org.openmrs.Patient;
+import org.openmrs.PatientIdentifier;
+import org.openmrs.PatientIdentifierType;
+import org.openmrs.PatientProgram;
+import org.openmrs.PersonAddress;
+import org.openmrs.PersonAttribute;
+import org.openmrs.PersonAttributeType;
+import org.openmrs.PersonName;
+import org.openmrs.api.APIException;
+import org.openmrs.api.ConceptService;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.idgen.service.IdentifierSourceService;
+import org.openmrs.util.PrivilegeConstants;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.Vector;
 
 /**
  *
@@ -43,7 +63,12 @@ public class SpreadsheetImportUtil {
 	
 	/** Logger for this class and subclasses */
 	protected static final Log log = LogFactory.getLog(SpreadsheetImportUtil.class);
-	
+	public static final String COVID_QUARANTINE_ENROLLMENT_ENCOUNTER = "33a3a55c-73ae-11ea-bc55-0242ac130003";
+	public static final String COVID_QUARANTINE_ENROLLMENT_FORM = "9a5d57b6-739a-11ea-bc55-0242ac130003";
+	public static final String COVID_QUARANTINE_PROGRAM = "9a5d555e-739a-11ea-bc55-0242ac130003";
+
+
+
 	/**
 	 * Resolve template dependencies: 1. Generate pre-specified values which are necessary for
 	 * template to be imported. 2. Create import indices which describe the order in which columns
@@ -249,10 +274,10 @@ public class SpreadsheetImportUtil {
 		List<String> columnNamesOnlyInTemplate = new Vector<String>();
 		columnNamesOnlyInTemplate.addAll(template.getColumnNamesAsList());
 		columnNamesOnlyInTemplate.removeAll(columnNames);
-		if (columnNamesOnlyInTemplate.isEmpty() == false) {
+		/*if (columnNamesOnlyInTemplate.isEmpty() == false) {
 			messages.add("required column names not present: " + toString(columnNamesOnlyInTemplate));
 			return null;
-		}
+		}*/
 		
 		// Extra column names?
 		List<String> columnNamesOnlyInSheet = new Vector<String>();
@@ -263,116 +288,8 @@ public class SpreadsheetImportUtil {
 		}
 		
 		// Process rows
-		boolean skipThisRow = true;
-		for (Row row : sheet) {
-			if (skipThisRow == true) {
-				skipThisRow = false;
-			} else {
-				boolean rowHasData = false;
-				Map<UniqueImport, Set<SpreadsheetImportTemplateColumn>> rowData = template
-				        .getMapOfUniqueImportToColumnSetSortedByImportIdx();
-				
-				for (UniqueImport uniqueImport : rowData.keySet()) {
-					Set<SpreadsheetImportTemplateColumn> columnSet = rowData.get(uniqueImport);
-					for (SpreadsheetImportTemplateColumn column : columnSet) {
-												
-						int idx = columnNames.indexOf(column.getName());
-						Cell cell = row.getCell(idx);
-						
-						Object value = null;
-						// check for empty cell (new Encounter)
-						if (cell == null) {
-							rowHasData = true;
-							column.setValue("");
-							continue;
-						}
-						
-						switch (cell.getCellType()) {
-							case Cell.CELL_TYPE_BOOLEAN:
-								value = new Boolean(cell.getBooleanCellValue());
-								break;
-							case Cell.CELL_TYPE_ERROR:
-								value = new Byte(cell.getErrorCellValue());
-								break;
-							case Cell.CELL_TYPE_FORMULA:
-							case Cell.CELL_TYPE_NUMERIC:
-								if (DateUtil.isCellDateFormatted(cell)) {
-									java.util.Date date = cell.getDateCellValue();
-									value = "'" + new java.sql.Timestamp(date.getTime()).toString() + "'";
-								} else {
-									value = cell.getNumericCellValue();
-								}
-								break;
-							case Cell.CELL_TYPE_STRING:
-								// Escape for SQL
-								value = "'" + cell.getRichStringCellValue() + "'";
-								break;
-						}
-						if (value != null) {
-							rowHasData = true;
-							column.setValue(value);
-						} else
-							column.setValue("");
-					}
-				}
-				
-				for (UniqueImport uniqueImport : rowData.keySet()) {
-					Set<SpreadsheetImportTemplateColumn> columnSet = rowData.get(uniqueImport);
-					boolean isFirst = true;
-					for (SpreadsheetImportTemplateColumn column : columnSet) {
+		importQuarantineList(sheet);
 
-						if (isFirst) {
-							// Should be same for all columns in unique import
-//							System.out.println("SpreadsheetImportUtil.importTemplate: column.getColumnPrespecifiedValues(): " + column.getColumnPrespecifiedValues().size());
-							if (column.getColumnPrespecifiedValues().size() > 0) {
-								Set<SpreadsheetImportTemplateColumnPrespecifiedValue> columnPrespecifiedValueSet = column.getColumnPrespecifiedValues();
-								for (SpreadsheetImportTemplateColumnPrespecifiedValue columnPrespecifiedValue : columnPrespecifiedValueSet) {
-//									System.out.println(columnPrespecifiedValue.getPrespecifiedValue().getValue());
-								}
-							}
-						}
-					}
-				}
-				
-				
-				
-				if (rowHasData) {
-					Exception exception = null;
-					try {
-						DatabaseBackend.validateData(rowData);
-						String encounterId = DatabaseBackend.importData(rowData, rollbackTransaction);
-						if (encounterId != null) {
-							for (UniqueImport uniqueImport : rowData.keySet()) {
-								Set<SpreadsheetImportTemplateColumn> columnSet = rowData.get(uniqueImport);
-								for (SpreadsheetImportTemplateColumn column : columnSet) {
-									if ("encounter".equals(column.getTableName())) {						
-										int idx = columnNames.indexOf(column.getName());
-										Cell cell = row.getCell(idx);
-										if (cell == null)											
-											cell = row.createCell(idx);
-										cell.setCellValue(encounterId);
-									}
-								}
-							}
-						}
-					} catch (SpreadsheetImportTemplateValidationException e) {
-						messages.add("Validation failed: " + e.getMessage());
-						return null;
-					} catch (SpreadsheetImportDuplicateValueException e) {
-						messages.add("found duplicate value for column " + e.getColumn().getName() + " with value " + e.getColumn().getValue());
-						return null;
-					} catch (SpreadsheetImportSQLSyntaxException e) {
-						messages.add("SQL syntax error: \"" + e.getSqlErrorMessage() + "\".<br/>Attempted SQL Statement: \"" + e.getSqlStatement() + "\"");
-						return null;
-					} catch (Exception e) {
-						exception = e;
-					}
-					if (exception != null) {
-						throw exception;
-					}
-				}
-			}
-		}
 		
 		// write back Excel file to a temp location
 		File returnFile = File.createTempFile("sim", ".xls");
@@ -382,4 +299,390 @@ public class SpreadsheetImportUtil {
 		
 		return returnFile;
 	}
+
+	private static void importQuarantineList(Sheet sheet) {
+
+		boolean start = true;
+		int counter = 0;
+		for (Row row : sheet) {
+			if (start) {
+				start = false;
+				continue;
+			}
+			int colFacilityName = 1;
+			int colClientName = 2;
+			int colAge = 4;
+			int colSex = 6;
+			int colNationalId = 7;
+			int colPhone = 8;
+			int colCountryofOrigin = 9;
+			int colTravelingFrom = 10;
+			int colNationality = 11;
+			int colNoKName = 15;
+			int colNoKContact = 16;
+			int colArrivalDate = 17;
+			counter++;
+
+			DataFormatter formatter = new DataFormatter();
+			String facilityName = formatter.formatCellValue(row.getCell(colFacilityName));
+			String clientName = formatter.formatCellValue(row.getCell(colClientName));
+			String ageStr = formatter.formatCellValue(row.getCell(colAge));
+			Integer age = ageStr != null && !ageStr.equals("") ? Integer.valueOf(ageStr) : 99;
+			String sex = formatter.formatCellValue(row.getCell(colSex));
+			String nationalId = formatter.formatCellValue(row.getCell(colNationalId));
+			String phone = formatter.formatCellValue(row.getCell(colPhone));
+			String countryofOrigin = String.valueOf(getColumnValue(row.getCell(colCountryofOrigin)));
+			String travelingFrom = String.valueOf(getColumnValue(row.getCell(colTravelingFrom)));
+			String nationality = formatter.formatCellValue(row.getCell(colNationality));
+			String noKName = formatter.formatCellValue(row.getCell(colNoKName));
+			String noKContact = formatter.formatCellValue(row.getCell(colNoKContact));
+			String arrivalDate = String.valueOf(getColumnValue(row.getCell(colArrivalDate)));
+			arrivalDate = arrivalDate.replace(".", "/");
+
+			Date admissionDate = null;
+			List<String> dateFormats = new ArrayList<String>();
+			dateFormats.add("dd/M/yy");
+			dateFormats.add("dd/MM/yyyy");
+			dateFormats.add("dd-MMM-yy");
+			dateFormats.add("dd-MMM-yyyy");
+			dateFormats.add("M/dd/yyyy");
+			dateFormats.add("MM/dd/yyyy");
+			dateFormats.add("dd/MM/yy");
+			dateFormats.add("dd/MM/yyyy");
+			dateFormats.add("dd/M/yyyy");
+			dateFormats.add("d/M/yy");
+			dateFormats.add("dd/MM/yyyy");
+			dateFormats.add("MM/dd/yyyy");
+
+			for (String format : dateFormats) {
+				try {
+					admissionDate = new SimpleDateFormat(format).parse(arrivalDate);
+					break;
+				} catch (ParseException e) {
+
+				}
+			}
+			if (admissionDate == null) {
+				admissionDate = new Date();
+
+			}
+
+			System.out.print("Facility Name, Client, age, nationalId, arrivalDate: ");
+			System.out.println(facilityName + " ," + clientName + ", " + age + ", " + nationalId + ", " + arrivalDate + " ");
+
+			Patient patient = createPatient(clientName, age != null ? age : null, sex, nationalId);
+			patient = addPersonAttributes(patient, phone, noKName, noKContact);
+			patient = addPersonAddresses(patient, nationality, null, null, null, null);
+			saveAndenrollPatientInCovidQuarantine(patient, admissionDate, facilityName);
+
+			if (counter % 200 == 0) {
+				Context.flushSession();
+				Context.clearSession();
+
+			}
+		}
+	}
+
+	private static Object getColumnValue(Cell cell) {
+		Object value = null;
+		//DataFormatter formatter = new DataFormatter();
+		switch (cell.getCellType()) {
+			case Cell.CELL_TYPE_BOOLEAN:
+				value = new Boolean(cell.getBooleanCellValue());
+				break;
+			case Cell.CELL_TYPE_ERROR:
+				value = new Byte(cell.getErrorCellValue());
+				break;
+			case Cell.CELL_TYPE_FORMULA:
+			case Cell.CELL_TYPE_NUMERIC:
+				if (DateUtil.isCellDateFormatted(cell)) {
+					java.util.Date date = cell.getDateCellValue();
+					value =  date;//"'" + new java.sql.Timestamp(date.getTime()).toString() + "'";
+				} else {
+					value = cell.getNumericCellValue();
+					value = ((Double)value).intValue();
+				}
+				break;
+			case Cell.CELL_TYPE_STRING:
+				// Escape for SQL
+				value = cell.getRichStringCellValue();
+				break;
+		}
+		return value;
+	}
+
+	private static Patient createPatient(String fullName, Integer age, String sex, String idNo) {
+
+		Patient patient = null;
+		String PASSPORT_NUMBER = "e1e80daa-6d7e-11ea-bc55-0242ac130003";
+
+		fullName = fullName.replace(".","");
+		fullName = fullName.replace(",", "");
+		fullName = fullName.replace("  ", " ");
+
+		String fName = "", mName = "", lName = "";
+		if (fullName != null && !fullName.equals("")) {
+
+			String [] nameParts = fullName.trim().split(" ");
+			fName = nameParts[0].trim();
+			if (nameParts.length > 1) {
+				lName = nameParts[1].trim();
+			} else {
+				lName = nameParts[0].trim();
+			}
+			if (nameParts.length > 2) {
+				mName = nameParts[2].trim();
+			}
+
+			fName = fName != null && !fName.equals("") ? fName : "";
+			mName = mName != null && !mName.equals("") ? mName : "";
+			lName = lName != null && !lName.equals("") ? lName : "";
+			patient = new Patient();
+			if (sex == null || sex.equals("") || StringUtils.isEmpty(sex)) {
+				sex = "U";
+			}
+			patient.setGender(sex);
+			PersonName pn = new PersonName();//Context.getPersonService().parsePersonName(fullName);
+			pn.setGivenName(fName);
+			pn.setFamilyName(lName);
+			if (mName != null && !mName.equals("")) {
+				pn.setMiddleName(mName);
+			}
+			System.out.print("Person name: " + pn);
+
+			patient.addName(pn);
+
+			if (age == null) {
+				age = 100;
+			}
+			Calendar effectiveDate = Calendar.getInstance();
+			effectiveDate.set(2020, 3, 1, 0, 0);
+
+			Calendar computedDob = Calendar.getInstance();
+			computedDob.setTimeInMillis(effectiveDate.getTimeInMillis());
+			computedDob.add(Calendar.YEAR, -age);
+
+			if (computedDob != null) {
+				patient.setBirthdate(computedDob.getTime());
+			}
+
+			patient.setBirthdateEstimated(true);
+
+			System.out.println(", ID No: " + idNo);
+
+			PatientIdentifier openMRSID = generateOpenMRSID();
+
+			if (idNo != null && !idNo.equals("")) {
+				PatientIdentifierType upnType = Context.getPatientService().getPatientIdentifierTypeByUuid(PASSPORT_NUMBER);
+
+				PatientIdentifier upn = new PatientIdentifier();
+				upn.setIdentifierType(upnType);
+				upn.setIdentifier(idNo);
+				upn.setPreferred(true);
+				patient.addIdentifier(upn);
+			} else {
+				openMRSID.setPreferred(true);
+			}
+			patient.addIdentifier(openMRSID);
+
+		}
+		return patient;
+	}
+
+	private static Patient addPersonAttributes(Patient patient, String phone, String nokName, String nokPhone) {
+
+		String NEXT_OF_KIN_CONTACT = "342a1d39-c541-4b29-8818-930916f4c2dc";
+		String NEXT_OF_KIN_NAME = "830bef6d-b01f-449d-9f8d-ac0fede8dbd3";
+		String TELEPHONE_CONTACT = "b2c38640-2603-4629-aebd-3b54f33f1e3a";
+
+
+		PersonAttributeType phoneType = Context.getPersonService().getPersonAttributeTypeByUuid(TELEPHONE_CONTACT);
+		PersonAttributeType nokNametype = Context.getPersonService().getPersonAttributeTypeByUuid(NEXT_OF_KIN_NAME);
+		PersonAttributeType nokContacttype = Context.getPersonService().getPersonAttributeTypeByUuid(NEXT_OF_KIN_CONTACT);
+
+		if (phone != null) {
+			PersonAttribute attribute = new PersonAttribute(phoneType, phone);
+
+			try {
+				Object hydratedObject = attribute.getHydratedObject();
+				if (hydratedObject == null || "".equals(hydratedObject.toString())) {
+					// if null is returned, the value should be blanked out
+					attribute.setValue("");
+				} else if (hydratedObject instanceof Attributable) {
+					attribute.setValue(((Attributable) hydratedObject).serialize());
+				} else if (!hydratedObject.getClass().getName().equals(phoneType.getFormat())) {
+					// if the classes doesn't match the format, the hydration failed somehow
+					// TODO change the PersonAttribute.getHydratedObject() to not swallow all errors?
+					throw new APIException();
+				}
+			} catch (APIException e) {
+				//.warn("Got an invalid value: " + value + " while setting personAttributeType id #" + paramName, e);
+				// setting the value to empty so that the user can reset the value to something else
+				attribute.setValue("");
+			}
+			patient.addAttribute(attribute);
+		}
+
+		if (nokName != null) {
+			PersonAttribute attribute = new PersonAttribute(nokNametype, nokName);
+
+			try {
+				Object hydratedObject = attribute.getHydratedObject();
+				if (hydratedObject == null || "".equals(hydratedObject.toString())) {
+					// if null is returned, the value should be blanked out
+					attribute.setValue("");
+				} else if (hydratedObject instanceof Attributable) {
+					attribute.setValue(((Attributable) hydratedObject).serialize());
+				} else if (!hydratedObject.getClass().getName().equals(nokNametype.getFormat())) {
+					// if the classes doesn't match the format, the hydration failed somehow
+					// TODO change the PersonAttribute.getHydratedObject() to not swallow all errors?
+					throw new APIException();
+				}
+			} catch (APIException e) {
+				//.warn("Got an invalid value: " + value + " while setting personAttributeType id #" + paramName, e);
+				// setting the value to empty so that the user can reset the value to something else
+				attribute.setValue("");
+			}
+			patient.addAttribute(attribute);
+		}
+
+		if (nokPhone != null) {
+			PersonAttribute attribute = new PersonAttribute(nokContacttype, nokPhone);
+
+			try {
+				Object hydratedObject = attribute.getHydratedObject();
+				if (hydratedObject == null || "".equals(hydratedObject.toString())) {
+					// if null is returned, the value should be blanked out
+					attribute.setValue("");
+				} else if (hydratedObject instanceof Attributable) {
+					attribute.setValue(((Attributable) hydratedObject).serialize());
+				} else if (!hydratedObject.getClass().getName().equals(nokContacttype.getFormat())) {
+					// if the classes doesn't match the format, the hydration failed somehow
+					// TODO change the PersonAttribute.getHydratedObject() to not swallow all errors?
+					throw new APIException();
+				}
+			} catch (APIException e) {
+				//.warn("Got an invalid value: " + value + " while setting personAttributeType id #" + paramName, e);
+				// setting the value to empty so that the user can reset the value to something else
+				attribute.setValue("");
+			}
+			patient.addAttribute(attribute);
+		}
+		return patient;
+	}
+
+	private static Patient addPersonAddresses(Patient patient, String nationality, String county, String subCounty, String ward, String postaladdress) {
+
+		Set<PersonAddress> patientAddress = patient.getAddresses();
+		if (patientAddress.size() > 0) {
+			for (PersonAddress address : patientAddress) {
+				if (nationality != null) {
+					address.setCountry(nationality);
+				}
+				if (county != null) {
+					address.setCountyDistrict(county);
+				}
+				if (subCounty != null) {
+					address.setStateProvince(subCounty);
+				}
+				if (ward != null) {
+					address.setAddress4(ward);
+				}
+
+				if (postaladdress != null) {
+					address.setAddress1(postaladdress);
+				}
+				patient.addAddress(address);
+			}
+		} else {
+			PersonAddress pa = new PersonAddress();
+			if (nationality != null) {
+				pa.setCountry(nationality);
+			}
+			if (county != null) {
+				pa.setCountyDistrict(county);
+			}
+			if (subCounty != null) {
+				pa.setStateProvince(subCounty);
+			}
+			if (ward != null) {
+				pa.setAddress4(ward);
+			}
+
+			if (postaladdress != null) {
+				pa.setAddress1(postaladdress);
+			}
+			patient.addAddress(pa);
+		}
+		return patient;
+	}
+
+	private static Patient saveAndenrollPatientInCovidQuarantine(Patient patient, Date admissionDate, String quarantineCenter) {
+
+		Encounter enc = new Encounter();
+		enc.setEncounterType(Context.getEncounterService().getEncounterTypeByUuid(COVID_QUARANTINE_ENROLLMENT_ENCOUNTER));
+		enc.setEncounterDatetime(admissionDate);
+		enc.setPatient(patient);
+		enc.addProvider(Context.getEncounterService().getEncounterRole(1), Context.getProviderService().getProvider(1));
+		enc.setForm(Context.getFormService().getFormByUuid(COVID_QUARANTINE_ENROLLMENT_FORM));
+
+
+		// set quarantine center
+		ConceptService conceptService = Context.getConceptService();
+		Obs o = new Obs();
+		o.setConcept(conceptService.getConcept("162724"));
+		o.setDateCreated(new Date());
+		o.setCreator(Context.getUserService().getUser(1));
+		o.setLocation(enc.getLocation());
+		o.setObsDatetime(admissionDate);
+		o.setPerson(patient);
+		o.setValueText(quarantineCenter);
+
+		// default all admissions type to new
+		Obs o1 = new Obs();
+		o1.setConcept(conceptService.getConcept("161641"));
+		o1.setDateCreated(new Date());
+		o1.setCreator(Context.getUserService().getUser(1));
+		o1.setLocation(enc.getLocation());
+		o1.setObsDatetime(admissionDate);
+		o1.setPerson(patient);
+		o1.setValueCoded(conceptService.getConcept("164144"));
+		enc.addObs(o);
+		enc.addObs(o1);
+
+		Context.getPatientService().savePatient(patient);
+		Context.getEncounterService().saveEncounter(enc);
+		// enroll in quarantine program
+		PatientProgram pp = new PatientProgram();
+		pp.setPatient(patient);
+		pp.setProgram(Context.getProgramWorkflowService().getProgramByUuid(COVID_QUARANTINE_PROGRAM));
+		pp.setDateEnrolled(admissionDate);
+		pp.setDateCreated(new Date());
+		Context.getProgramWorkflowService().savePatientProgram(pp);
+
+		return patient;
+	}
+
+	private static PatientIdentifier generateOpenMRSID() {
+		PatientIdentifierType openmrsIDType = Context.getPatientService().getPatientIdentifierTypeByUuid("dfacd928-0370-4315-99d7-6ec1c9f7ae76");
+		String generated = Context.getService(IdentifierSourceService.class).generateIdentifier(openmrsIDType, "Registration");
+		PatientIdentifier identifier = new PatientIdentifier(generated, openmrsIDType, getDefaultLocation());
+		return identifier;
+	}
+
+	public static Location getDefaultLocation() {
+		try {
+			Context.addProxyPrivilege(PrivilegeConstants.VIEW_LOCATIONS);
+			Context.addProxyPrivilege(PrivilegeConstants.VIEW_GLOBAL_PROPERTIES);
+			String GP_DEFAULT_LOCATION = "kenyaemr.defaultLocation";
+			GlobalProperty gp = Context.getAdministrationService().getGlobalPropertyObject(GP_DEFAULT_LOCATION);
+			return gp != null ? ((Location) gp.getValue()) : null;
+		}
+		finally {
+			Context.removeProxyPrivilege(PrivilegeConstants.VIEW_LOCATIONS);
+			Context.removeProxyPrivilege(PrivilegeConstants.VIEW_GLOBAL_PROPERTIES);
+		}
+
+	}
+
 }

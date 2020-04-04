@@ -88,11 +88,18 @@ lib/poi-ooxml-3.6-20091214.jar
 				<artifactId>poi-ooxml-schemas</artifactId>
 				<version>3.6</version>
 			</dependency>
+			<dependency>
+				<groupId>org.openmrs.module</groupId>
+				<artifactId>idgen-api</artifactId>
+				<version>${idgenVersion}</version>
+				<scope>provided</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
 	<properties>
-		<openMRSVersion>1.9.9</openMRSVersion>
+		<openMRSVersion>1.12.1</openMRSVersion>
+		<idgenVersion>2.6</idgenVersion>
 	</properties>
 
 	<build>

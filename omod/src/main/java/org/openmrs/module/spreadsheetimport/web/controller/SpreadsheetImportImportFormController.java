@@ -79,28 +79,6 @@ public class SpreadsheetImportImportFormController {
 	                            HttpServletResponse response) throws Exception {
 		
 		
-//		Map<UniqueImport, Set<SpreadsheetImportTemplateColumn>> rowDataTemp = template.getMapOfUniqueImportToColumnSetSortedByImportIdx();
-//
-//		for (UniqueImport uniqueImport : rowDataTemp.keySet()) {
-//			Set<SpreadsheetImportTemplateColumn> columnSet = rowDataTemp.get(uniqueImport);
-//			boolean isFirst = true;
-//			for (SpreadsheetImportTemplateColumn column : columnSet) {
-//
-//				if (isFirst) {
-//					// Should be same for all columns in unique import
-//					System.out.println("SpreadsheetImportUtil.importTemplate: column.getColumnPrespecifiedValues(): " + column.getColumnPrespecifiedValues().size());
-//					if (column.getColumnPrespecifiedValues().size() > 0) {
-//						Set<SpreadsheetImportTemplateColumnPrespecifiedValue> columnPrespecifiedValueSet = column.getColumnPrespecifiedValues();
-//						for (SpreadsheetImportTemplateColumnPrespecifiedValue columnPrespecifiedValue : columnPrespecifiedValueSet) {
-//							System.out.println(columnPrespecifiedValue.getPrespecifiedValue().getValue());
-//						}
-//					}
-//				}
-//			}
-//		}
-
-		
-		
 		List<String> messages = new ArrayList<String>();
 		boolean rollbackTransaction = true;
 		if (request.getParameter("rollbackTransaction") == null) {
