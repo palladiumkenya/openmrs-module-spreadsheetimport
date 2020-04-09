@@ -48,6 +48,7 @@ import java.io.FileOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -66,10 +67,14 @@ public class SpreadsheetImportUtil {
 	public static final String COVID_QUARANTINE_ENROLLMENT_ENCOUNTER = "33a3a55c-73ae-11ea-bc55-0242ac130003";
 	public static final String COVID_QUARANTINE_ENROLLMENT_FORM = "9a5d57b6-739a-11ea-bc55-0242ac130003";
 	public static final String COVID_QUARANTINE_PROGRAM = "9a5d555e-739a-11ea-bc55-0242ac130003";
+    public static final String COVID_19_TRAVEL_HISTORY_ENCOUNTER = "50a59411-921b-435a-9109-42aa68ee7aa7";
+    public static final String COVID_19_TRAVEL_HISTORY_FORM = "87513b50-6ced-11ea-bc55-0242ac130003";
 
 
 
-	/**
+
+
+    /**
 	 * Resolve template dependencies: 1. Generate pre-specified values which are necessary for
 	 * template to be imported. 2. Create import indices which describe the order in which columns
 	 * must be imported. 3. Generated dependencies between columns being imported and other columns
@@ -294,7 +299,7 @@ public class SpreadsheetImportUtil {
 		// write back Excel file to a temp location
 		File returnFile = File.createTempFile("sim", ".xls");
 		FileOutputStream fos = new FileOutputStream(returnFile);
-		wb.write(fos);
+		//wb.write(fos);
 		fos.close();
 		
 		return returnFile;
@@ -319,8 +324,11 @@ public class SpreadsheetImportUtil {
 			int colTravelingFrom = 10;
 			int colNationality = 11;
 			int colNoKName = 15;
+			//int colNoKName = 13;
 			int colNoKContact = 16;
+			//int colNoKContact = 14;
 			int colArrivalDate = 17;
+			//int colArrivalDate = 15;
 			counter++;
 
 			DataFormatter formatter = new DataFormatter();
@@ -331,28 +339,25 @@ public class SpreadsheetImportUtil {
 			String sex = formatter.formatCellValue(row.getCell(colSex));
 			String nationalId = formatter.formatCellValue(row.getCell(colNationalId));
 			String phone = formatter.formatCellValue(row.getCell(colPhone));
-			String countryofOrigin = String.valueOf(getColumnValue(row.getCell(colCountryofOrigin)));
-			String travelingFrom = String.valueOf(getColumnValue(row.getCell(colTravelingFrom)));
+			String countryofOrigin = formatter.formatCellValue(row.getCell(colCountryofOrigin));
+			String travelingFrom = formatter.formatCellValue(row.getCell(colTravelingFrom));
 			String nationality = formatter.formatCellValue(row.getCell(colNationality));
 			String noKName = formatter.formatCellValue(row.getCell(colNoKName));
 			String noKContact = formatter.formatCellValue(row.getCell(colNoKContact));
-			String arrivalDate = String.valueOf(getColumnValue(row.getCell(colArrivalDate)));
+			String arrivalDate = formatter.formatCellValue(row.getCell(colArrivalDate));
 			arrivalDate = arrivalDate.replace(".", "/");
 
+			Patient p = checkIfPatientExists(nationalId);
+			if (p != null) {
+				System.out.println("A patient with identifier " + nationalId + " already exists. Skipping this row");
+				continue;
+			}
 			Date admissionDate = null;
 			List<String> dateFormats = new ArrayList<String>();
-			dateFormats.add("dd/M/yy");
+
+            dateFormats.add("dd-MM-yyyy");
 			dateFormats.add("dd/MM/yyyy");
-			dateFormats.add("dd-MMM-yy");
 			dateFormats.add("dd-MMM-yyyy");
-			dateFormats.add("M/dd/yyyy");
-			dateFormats.add("MM/dd/yyyy");
-			dateFormats.add("dd/MM/yy");
-			dateFormats.add("dd/MM/yyyy");
-			dateFormats.add("dd/M/yyyy");
-			dateFormats.add("d/M/yy");
-			dateFormats.add("dd/MM/yyyy");
-			dateFormats.add("MM/dd/yyyy");
 
 			for (String format : dateFormats) {
 				try {
@@ -369,11 +374,21 @@ public class SpreadsheetImportUtil {
 
 			System.out.print("Facility Name, Client, age, nationalId, arrivalDate: ");
 			System.out.println(facilityName + " ," + clientName + ", " + age + ", " + nationalId + ", " + arrivalDate + " ");
+			phone = phone.replace("-", "");
+			nationalId.replace("-","");
+			facilityName.replace("'","\'");
 
-			Patient patient = createPatient(clientName, age != null ? age : null, sex, nationalId);
+			Patient patient = createPatient(clientName, age != null ? age : 99, sex, nationalId);
 			patient = addPersonAttributes(patient, phone, noKName, noKContact);
 			patient = addPersonAddresses(patient, nationality, null, null, null, null);
-			saveAndenrollPatientInCovidQuarantine(patient, admissionDate, facilityName);
+			patient = saveAndenrollPatientInCovidQuarantine(patient, admissionDate, facilityName);
+
+			if (travelingFrom.equals("") && !countryofOrigin.equals("")) {
+			    travelingFrom = countryofOrigin;
+            }
+            if (travelingFrom != null && !travelingFrom.equals("") && patient != null) {
+                updateTravelInfo(patient, admissionDate, travelingFrom);
+            }
 
 			if (counter % 200 == 0) {
 				Context.flushSession();
@@ -418,6 +433,7 @@ public class SpreadsheetImportUtil {
 
 		fullName = fullName.replace(".","");
 		fullName = fullName.replace(",", "");
+		fullName = fullName.replace("'", "");
 		fullName = fullName.replace("  ", " ");
 
 		String fName = "", mName = "", lName = "";
@@ -489,6 +505,85 @@ public class SpreadsheetImportUtil {
 		return patient;
 	}
 
+	public static Patient checkIfPatientExists(String identifier) {
+
+		if (identifier != null) {
+			List<Patient> patientsAlreadyAssigned = Context.getPatientService().getPatients(null, identifier.trim(), null, false);
+			if (patientsAlreadyAssigned.size() > 0) {
+				return patientsAlreadyAssigned.get(0);
+			}
+		}
+		/*PatientIdentifierType HEI_NUMBER_TYPE = patientService.getPatientIdentifierTypeByUuid(HEI_UNIQUE_NUMBER);
+		PatientIdentifierType CCC_NUMBER_TYPE = patientService.getPatientIdentifierTypeByUuid(UNIQUE_PATIENT_NUMBER);
+		PatientIdentifierType NATIONAL_ID_TYPE = patientService.getPatientIdentifierTypeByUuid(NATIONAL_ID);
+		PatientIdentifierType SMART_CARD_SERIAL_NUMBER_TYPE = patientService.getPatientIdentifierTypeByUuid(SmartCardMetadata._PatientIdentifierType.SMART_CARD_SERIAL_NUMBER);
+		PatientIdentifierType HTS_NUMBER_TYPE = patientService.getPatientIdentifierTypeByUuid(SmartCardMetadata._PatientIdentifierType.HTS_NUMBER);
+		PatientIdentifierType GODS_NUMBER_TYPE = patientService.getPatientIdentifierTypeByUuid(SmartCardMetadata._PatientIdentifierType.GODS_NUMBER);
+
+		String shrGodsNumber = SHRUtils.getSHR(incomingSHR).pATIENT_IDENTIFICATION.eXTERNAL_PATIENT_ID.iD;
+		if (shrGodsNumber != null && !shrGodsNumber.isEmpty()) {
+			List<Patient> patientsAssignedGodsNumber = patientService.getPatients(null, shrGodsNumber.trim(), Arrays.asList(GODS_NUMBER_TYPE), false);
+			if (patientsAssignedGodsNumber.size() > 0) {
+				return patientsAssignedGodsNumber.get(0);
+			}
+		}
+		for (int x = 0; x < SHRUtils.getSHR(this.incomingSHR).pATIENT_IDENTIFICATION.iNTERNAL_PATIENT_ID.length; x++) {
+
+			String idType = SHRUtils.getSHR(this.incomingSHR).pATIENT_IDENTIFICATION.iNTERNAL_PATIENT_ID[x].iDENTIFIER_TYPE;
+			PatientIdentifierType identifierType = null;
+
+			String identifier = SHRUtils.getSHR(this.incomingSHR).pATIENT_IDENTIFICATION.iNTERNAL_PATIENT_ID[x].iD;
+
+			if (idType.equals("ANC_NUMBER")) {
+				// get patient with the identifier
+
+				List<Obs> obs = obsService.getObservations(
+						null,
+						null,
+						Arrays.asList(conceptService.getConceptByUuid(ANC_NUMBER)),
+						null,
+						null,
+						null,
+						null,
+						null,
+						null,
+						null,
+						null,
+						false
+				);
+				for (Obs ancNo : obs) {
+					if (ancNo.getValueText().equals(identifier.trim()))
+						return (Patient) ancNo.getPerson();
+				}
+
+			} else {
+				if (idType.equals("HEI_NUMBER")) {
+					identifierType = HEI_NUMBER_TYPE;
+				} else if (idType.equals("CCC_NUMBER")) {
+					identifierType = CCC_NUMBER_TYPE;
+				} else if (idType.equals("NATIONAL_ID")) {
+					identifierType = NATIONAL_ID_TYPE;
+				} else if (idType.equals("CARD_SERIAL_NUMBER")) {
+					identifierType = SMART_CARD_SERIAL_NUMBER_TYPE;
+				} else if (idType.equals("HTS_NUMBER")) {
+					identifierType = HTS_NUMBER_TYPE;
+				}
+
+				if (identifierType != null && identifier != null) {
+					List<Patient> patientsAlreadyAssigned = Context.getPatientService().getPatients(null, identifier.trim(), null, false);
+					if (patientsAlreadyAssigned.size() > 0) {
+						return patientsAlreadyAssigned.get(0);
+					}
+				}
+			}
+
+		}*/
+
+
+		return null;
+	}
+
+
 	private static Patient addPersonAttributes(Patient patient, String phone, String nokName, String nokPhone) {
 
 		String NEXT_OF_KIN_CONTACT = "342a1d39-c541-4b29-8818-930916f4c2dc";
@@ -500,7 +595,7 @@ public class SpreadsheetImportUtil {
 		PersonAttributeType nokNametype = Context.getPersonService().getPersonAttributeTypeByUuid(NEXT_OF_KIN_NAME);
 		PersonAttributeType nokContacttype = Context.getPersonService().getPersonAttributeTypeByUuid(NEXT_OF_KIN_CONTACT);
 
-		if (phone != null) {
+		if (phone != null && !phone.equals("")) {
 			PersonAttribute attribute = new PersonAttribute(phoneType, phone);
 
 			try {
@@ -523,7 +618,7 @@ public class SpreadsheetImportUtil {
 			patient.addAttribute(attribute);
 		}
 
-		if (nokName != null) {
+		if (nokName != null && !nokName.equals("")) {
 			PersonAttribute attribute = new PersonAttribute(nokNametype, nokName);
 
 			try {
@@ -546,7 +641,7 @@ public class SpreadsheetImportUtil {
 			patient.addAttribute(attribute);
 		}
 
-		if (nokPhone != null) {
+		if (nokPhone != null && !nokPhone.equals("")) {
 			PersonAttribute attribute = new PersonAttribute(nokContacttype, nokPhone);
 
 			try {
@@ -616,6 +711,55 @@ public class SpreadsheetImportUtil {
 		}
 		return patient;
 	}
+
+	private static void updateTravelInfo(Patient patient, Date admissionDate, String from) {
+
+		Encounter enc = new Encounter();
+		enc.setEncounterType(Context.getEncounterService().getEncounterTypeByUuid(COVID_19_TRAVEL_HISTORY_ENCOUNTER));
+		enc.setEncounterDatetime(admissionDate);
+		enc.setPatient(patient);
+		enc.addProvider(Context.getEncounterService().getEncounterRole(1), Context.getProviderService().getProvider(1));
+		enc.setForm(Context.getFormService().getFormByUuid(COVID_19_TRAVEL_HISTORY_FORM));
+
+
+		// set traveled from
+		ConceptService conceptService = Context.getConceptService();
+		Obs o = new Obs();
+		o.setConcept(conceptService.getConcept("165198"));
+		o.setDateCreated(new Date());
+		o.setCreator(Context.getUserService().getUser(1));
+		o.setLocation(enc.getLocation());
+		o.setObsDatetime(admissionDate);
+		o.setPerson(patient);
+		o.setValueText(from);
+
+		// date of arrival
+        Obs ad = new Obs();
+        ad.setConcept(conceptService.getConcept("160753"));
+        ad.setDateCreated(new Date());
+        ad.setCreator(Context.getUserService().getUser(1));
+        ad.setLocation(enc.getLocation());
+        ad.setObsDatetime(admissionDate);
+        ad.setPerson(patient);
+        ad.setValueDatetime(admissionDate);
+
+		// default all to flight
+		Obs o1 = new Obs();
+		o1.setConcept(conceptService.getConcept("1375"));
+		o1.setDateCreated(new Date());
+		o1.setCreator(Context.getUserService().getUser(1));
+		o1.setLocation(enc.getLocation());
+		o1.setObsDatetime(admissionDate);
+		o1.setPerson(patient);
+		o1.setValueCoded(conceptService.getConcept("1378"));
+		enc.addObs(o);
+		enc.addObs(ad);
+		enc.addObs(o1);
+
+		Context.getEncounterService().saveEncounter(enc);
+
+	}
+
 
 	private static Patient saveAndenrollPatientInCovidQuarantine(Patient patient, Date admissionDate, String quarantineCenter) {
 
