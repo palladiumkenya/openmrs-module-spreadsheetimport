@@ -29,6 +29,7 @@ alter table migration_tr.tr_mch_pnc_visit add column patient_id int(100) default
 alter table migration_tr.tr_hei_outcome add column patient_id int(100) default null;
 alter table migration_tr.tr_hei_enrollment add column patient_id int(100) default null;
 alter table migration_tr.tr_hei_followup add column patient_id int(100) default null;
+alter table migration_tr.tr_vital_labs add column patient_id int(100) default null;
 alter table migration_tr.tr_person_relationship add column Person_a_person_id INT(11) default null, add column person_b_person_id INT(11) default null, add column openmrs_relationship_type INT(11) default null;
 
 --Add index
@@ -61,6 +62,7 @@ alter table migration_tr.tr_mch_pnc_visit add index (Person_Id);
 alter table migration_tr.tr_hei_outcome add index (Person_Id);
 alter table migration_tr.tr_hei_enrollment add index (Person_Id);
 alter table migration_tr.tr_hei_followup add index (Person_Id);
+alter table migration_tr.tr_vital_labs add index (Person_Id);
 alter table migration_tr.tr_person_relationship add index(Index_Person_Id);
 alter table migration_tr.tr_person_relationship add index(Relative_Person_Id);
 
