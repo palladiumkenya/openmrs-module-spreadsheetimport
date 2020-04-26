@@ -62,6 +62,7 @@ alter table migration_tr.tr_mch_pnc_visit add index (Person_Id);
 alter table migration_tr.tr_hei_outcome add index (Person_Id);
 alter table migration_tr.tr_hei_enrollment add index (Person_Id);
 alter table migration_tr.tr_hei_followup add index (Person_Id);
+alter table migration_tr.tr_vital_labs add index (Person_Id);
 alter table migration_tr.tr_person_relationship add index(Index_Person_Id);
 alter table migration_tr.tr_person_relationship add index(Relative_Person_Id);
 alter table migration_tr.tr_vital_labs add index (Person_Id);
