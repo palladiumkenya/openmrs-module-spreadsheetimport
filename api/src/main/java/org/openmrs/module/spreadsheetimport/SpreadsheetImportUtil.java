@@ -17,7 +17,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
-import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -35,16 +34,22 @@ import org.openmrs.Patient;
 import org.openmrs.PatientIdentifier;
 import org.openmrs.PatientIdentifierType;
 import org.openmrs.PatientProgram;
+import org.openmrs.Person;
 import org.openmrs.PersonAddress;
 import org.openmrs.PersonAttribute;
 import org.openmrs.PersonAttributeType;
 import org.openmrs.PersonName;
+import org.openmrs.Relationship;
+import org.openmrs.RelationshipType;
 import org.openmrs.TestOrder;
 import org.openmrs.api.APIException;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.OrderContext;
+import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.hivtestingservices.api.HTSService;
+import org.openmrs.module.hivtestingservices.api.PatientContact;
 import org.openmrs.module.idgen.service.IdentifierSourceService;
 import org.openmrs.util.PrivilegeConstants;
 import org.springframework.util.StringUtils;
@@ -55,7 +60,6 @@ import java.io.FileOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -72,7 +76,11 @@ public class SpreadsheetImportUtil {
 	/** Logger for this class and subclasses */
 	protected static final Log log = LogFactory.getLog(SpreadsheetImportUtil.class);
 	public static final String COVID_QUARANTINE_ENROLLMENT_ENCOUNTER = "33a3a55c-73ae-11ea-bc55-0242ac130003";
+	public static final String COVID_QUARANTINE_OUTCOME_ENCOUNTER = "33a3a7be-73ae-11ea-bc55-0242ac130003";
+
 	public static final String COVID_QUARANTINE_ENROLLMENT_FORM = "9a5d57b6-739a-11ea-bc55-0242ac130003";
+	public static final String COVID_QUARANTINE_OUTCOME_FORM = "9a5d58c4-739a-11ea-bc55-0242ac130003";
+
 	public static final String COVID_QUARANTINE_PROGRAM = "9a5d555e-739a-11ea-bc55-0242ac130003";
     public static final String COVID_19_TRAVEL_HISTORY_ENCOUNTER = "50a59411-921b-435a-9109-42aa68ee7aa7";
     public static final String COVID_19_TRAVEL_HISTORY_FORM = "87513b50-6ced-11ea-bc55-0242ac130003";
@@ -80,7 +88,10 @@ public class SpreadsheetImportUtil {
 
 
 	public static final String COVID_19_CASE_INVESTIGATION_FORM = "0fe60b26-8648-438b-afea-8841dcd993c6";
+	public static final String COVID_OUTCOME_FORM = "8f4e3e83-c597-47ad-8999-b788e8255d20";
 	public static final String COVID_19_CASE_INVESTIGATION_ENCOUNTER = "a4414aee-6832-11ea-bc55-0242ac130003";
+	public static final String COVID_OUTCOME_ENCOUNTER = "7b118dac-6f61-4466-ad1a-7e01aca077ad";
+
 	public static final String COVID_19_CASE_INVESTIGATION_PROGRAM = "e7ee7548-6958-4361-bed9-ee2614423947";
 	public static final String COVID_19_LAB_TEST_CONCEPT = "165611AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 	public static final String COVID_19_BASELINE_TEST_CONCEPT = "162080AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -408,7 +419,7 @@ public class SpreadsheetImportUtil {
 			Patient patient = createPatient(clientName, age != null ? age : 99, sex, nationalId);
 			patient = addPersonAttributes(patient, phone, noKName, noKContact);
 			patient = addPersonAddresses(patient, nationality, null, null, null, null);
-			patient = saveAndenrollPatientInCovidQuarantine(patient, admissionDate, facilityName);
+			patient = saveAndenrollPatientInCovidQuarantine(patient, admissionDate, facilityName, null , null);
 
 			if (travelingFrom.equals("") && !countryofOrigin.equals("")) {
 			    travelingFrom = countryofOrigin;
@@ -569,7 +580,7 @@ public class SpreadsheetImportUtil {
 			patient = addPersonAttributes(patient, phone, null, null);
 			patient = addPersonAddresses(patient, nationality, county, subCounty, null, null);
 			if (org.apache.commons.lang3.StringUtils.isNotBlank(quarantineFacilityName)) {
-				patient = saveAndenrollPatientInCovidQuarantine(patient, admissionDate, quarantineFacilityName);
+				patient = saveAndenrollPatientInCovidQuarantine(patient, admissionDate, quarantineFacilityName, null, null);
 			}
 
 			String hasTravelHistory = null;
@@ -670,6 +681,9 @@ public class SpreadsheetImportUtil {
 			int colFollowup2TestResult = 39;
 			int colFollowup3TestDate = 40;
 			int colFollowup3TestResult = 41;
+			int colOutcome = 42;
+			int colOutcomeDate = 43;
+			int colQuarantineFacility = 44;
 
 			counter++;
 
@@ -706,7 +720,8 @@ public class SpreadsheetImportUtil {
 			String hospitalization = formatter.formatCellValue(row.getCell(colHospitalization));
 			String hospitalAdmissionDate = formatter.formatCellValue(row.getCell(colDateOfAdmission));
 
-			String baselineSampleDate = formatter.formatCellValue(row.getCell(colDateConfirmedPositive));
+			String baselineSampleDate = formatter.formatCellValue(row.getCell(colBaselineSampleDate));
+			String baselineResultDate = formatter.formatCellValue(row.getCell(colDateConfirmedPositive));
 			String baselineResult = formatter.formatCellValue(row.getCell(colBaselineResult));
 			String firstFollowupDate = formatter.formatCellValue(row.getCell(colFollowup1TestDate));
 			String firstFollowupResult = formatter.formatCellValue(row.getCell(colFollowup1TestResult));
@@ -714,18 +729,21 @@ public class SpreadsheetImportUtil {
 			String secondFollowupResult = formatter.formatCellValue(row.getCell(colFollowup2TestResult));
 			String thirdFollowupDate = formatter.formatCellValue(row.getCell(colFollowup3TestDate));
 			String thirdFollowupResult = formatter.formatCellValue(row.getCell(colFollowup3TestResult));
-
-
+			String outcome = formatter.formatCellValue(row.getCell(colOutcome));
+			String outcomeDate = formatter.formatCellValue(row.getCell(colOutcomeDate));
+			String quarantineFacility = formatter.formatCellValue(row.getCell(colQuarantineFacility));
 
 
 			String arrivalDate = formatter.formatCellValue(row.getCell(colArrivalDate));
 			arrivalDate = arrivalDate.replace("\\", "");
 			hospitalAdmissionDate = hospitalAdmissionDate.replace("\\", "");
 			symptomsOnsetDate = symptomsOnsetDate.replace("\\", "");
+			baselineResultDate = baselineResultDate.replace("\\", "");
 			baselineSampleDate = baselineSampleDate.replace("\\", "");
 			firstFollowupDate = firstFollowupDate.replace("\\", "");
 			secondFollowupDate = secondFollowupDate.replace("\\", "");
 			thirdFollowupDate = thirdFollowupDate.replace("\\", "");
+			outcomeDate = outcomeDate.replace("\\", "");
 
 			if (org.apache.commons.lang3.StringUtils.isBlank(baselineResult)) {
 
@@ -735,17 +753,22 @@ public class SpreadsheetImportUtil {
 				continue;
 			}
 			Patient p = checkIfPatientExists(nationalId);
+			if (p == null) {
+				p = checkIfPatientExists(caseId);
+			}
 			if (p != null) {
-				System.out.println("A patient with identifier " + nationalId + " already exists. Skipping this row");
+				System.out.println("A patient with identifier " + (org.apache.commons.lang3.StringUtils.isNotBlank(nationalId) ? nationalId : caseId) +  " already exists. Skipping this row");
 				continue;
 			}
 			Date admissionDate = null;
 			Date dateOfArrival = null;
 			Date baselineLabTestDate = null;
+			Date dateConfirmedPositive = null;
 			Date firstFollowupLabTestDate = null;
 			Date secondFollowupLabTestDate = null;
 			Date thirdFollowupLabTestDate = null;
 			Date dateOfSymptomOnset = null;
+			Date dateOfOutcome = null;
 			List<String> dateFormats = new ArrayList<String>();
 
 			//dateFormats.add("dd-MM-yyyy");
@@ -829,41 +852,74 @@ public class SpreadsheetImportUtil {
 				}
 			}
 
+			for (String format : dateFormats) {
+				try {
+					if (org.apache.commons.lang3.StringUtils.isNotBlank(outcomeDate)) {
+						dateOfOutcome = new SimpleDateFormat(format).parse(outcomeDate);
+					}
+					break;
+				} catch(ParseException e){
+
+				}
+			}
+
+			for (String format : dateFormats) {
+				try {
+					if (org.apache.commons.lang3.StringUtils.isNotBlank(baselineResultDate)) {
+						dateConfirmedPositive = new SimpleDateFormat(format).parse(baselineResultDate);
+					}
+					break;
+				} catch(ParseException e){
+
+				}
+			}
+
 
 			if (admissionDate == null) {
 				admissionDate = new Date();
 			}
 
+			if (baselineLabTestDate == null && dateConfirmedPositive != null) {
+				baselineLabTestDate = dateConfirmedPositive;
+			}
+
+			if (dateConfirmedPositive == null && baselineLabTestDate != null) {
+				dateConfirmedPositive = baselineLabTestDate;
+			}
 			System.out.print("Facility Name, Client, age, nationalId, arrivalDate: ");
 			System.out.println(healthFacility + " ," + clientName + ", " + age + ", " + nationalId + ", " + arrivalDate + " ");
 			phone = phone.replace("-", "");
 			nationalId.replace("-","");
 			healthFacility.replace("'","\'");
+			Date dateOfDeath = null;
+			if (dateOfOutcome != null && org.apache.commons.lang3.StringUtils.isNotBlank(outcome) && (outcome.equalsIgnoreCase("DEAD"))) {
+				dateOfDeath = dateOfOutcome;
+			}
 
-			Patient patient = createPatient(clientName, age != null ? age : 99, sex, nationalId, caseId);
+			Patient patient = createPatient(clientName, age != null ? age : 99, sex, nationalId, caseId, dateOfDeath);
 			patient = addPersonAttributes(patient, phone, null, null);
 			patient = addPersonAddresses(patient, nationality, countyOfResidence, subCounty, ward, villageEstate);
-			if (org.apache.commons.lang3.StringUtils.isNotBlank(healthFacility)) {
-				patient = saveAndenrollPatientInCovidQuarantine(patient, admissionDate, healthFacility);
+			if (org.apache.commons.lang3.StringUtils.isNotBlank(quarantineFacility)) {
+				patient = saveAndenrollPatientInCovidQuarantine(patient, baselineLabTestDate, quarantineFacility, dateConfirmedPositive, healthFacility);
 			}
 
 			String hasTravelHistory = null;
 			String historyOfContactWithCase = null;
 			if (org.apache.commons.lang3.StringUtils.isNotBlank(travelHistory) && travelHistory.equalsIgnoreCase("Yes")) {
 				hasTravelHistory = "Yes";
-			} else {
+			} else if (org.apache.commons.lang3.StringUtils.isNotBlank(travelHistory) && travelHistory.equalsIgnoreCase("No")) {
 				hasTravelHistory = "No";
 			}
 
-			if (hasTravelHistory != null && hasTravelHistory.equalsIgnoreCase("Yes") && org.apache.commons.lang3.StringUtils.isNotBlank(contactWithConfirmedCase) && contactWithConfirmedCase.equalsIgnoreCase("No")){
+			if (org.apache.commons.lang3.StringUtils.isNotBlank(contactWithConfirmedCase) && contactWithConfirmedCase.equalsIgnoreCase("No")){
 				historyOfContactWithCase = "No";
-			} else {
+			} else if(org.apache.commons.lang3.StringUtils.isNotBlank(contactWithConfirmedCase) && contactWithConfirmedCase.equalsIgnoreCase("Yes")) {
 				historyOfContactWithCase = "Yes";
 			}
 
 			baselineResult = baselineResult.equalsIgnoreCase("Positive") ? "Positive" : "Negative";
-			enrollInCovidCaseInvestigationProgram(patient, admissionDate, county, subCounty, sourceOfInfection, healthFacility, hasTravelHistory, historyOfContactWithCase, labName, baselineLabTestDate, baselineResult, hasSymptoms,
-					dateOfSymptomOnset, hasCough, hasFever, hasDifficultyBreathing, hasOtherSymptoms, null, null, null, occupation);
+			enrollInCovidCaseInvestigationProgram(patient, baselineLabTestDate, county, null, sourceOfInfection, healthFacility, hasTravelHistory, historyOfContactWithCase, labName, baselineLabTestDate, dateConfirmedPositive, baselineResult, hasSymptoms,
+					dateOfSymptomOnset, hasCough, hasFever, hasDifficultyBreathing, hasOtherSymptoms, null, null, hospitalization, occupation);
 
 
 			if (travelingFrom != null && !travelingFrom.equals("") && patient != null && dateOfArrival != null) {
@@ -871,18 +927,41 @@ public class SpreadsheetImportUtil {
 			}
 
 			if (firstFollowupLabTestDate != null && org.apache.commons.lang3.StringUtils.isNotBlank(firstFollowupResult)) {
-				saveLabOrder(patient, null, labName, firstFollowupLabTestDate, "1stFollowup", firstFollowupResult);
+				saveLabOrder(patient, null, labName, firstFollowupLabTestDate,firstFollowupLabTestDate, "1stFollowup", firstFollowupResult);
 			}
 
 			if (secondFollowupLabTestDate != null && org.apache.commons.lang3.StringUtils.isNotBlank(secondFollowupResult)) {
-				saveLabOrder(patient, null, labName, secondFollowupLabTestDate, "2ndFollowup", secondFollowupResult);
+				saveLabOrder(patient, null, labName, secondFollowupLabTestDate, secondFollowupLabTestDate, "2ndFollowup", secondFollowupResult);
 			}
 
 			if (thirdFollowupLabTestDate != null && org.apache.commons.lang3.StringUtils.isNotBlank(thirdFollowupResult)) {
-				saveLabOrder(patient, null, labName, thirdFollowupLabTestDate, "3rdFollowup", thirdFollowupResult);
+				saveLabOrder(patient, null, labName, thirdFollowupLabTestDate, thirdFollowupLabTestDate, "3rdFollowup", thirdFollowupResult);
 			}
 
+			// add patient patient contact
 
+			if (patient != null && org.apache.commons.lang3.StringUtils.isNotBlank(contactWithConfirmedCase) && !contactWithConfirmedCase.equalsIgnoreCase("No")) {
+				// get index case
+				Patient indexCase = checkIfPatientExists(contactWithConfirmedCase.trim());
+				if (indexCase != null) {
+					PatientContact patientContact = createPatientContact(clientName, age != null ? age : 99, sex);
+					if (patientContact != null) {
+						patientContact.setPatientRelatedTo(indexCase);
+						patientContact.setPatient(patient);
+						patientContact.setIpvOutcome("CHT");
+						patientContact.setPnsApproach(1060); // default to living together
+						patientContact.setVoided(false);
+						patientContact.setContactListingDeclineReason("Primary");
+						Context.getService(HTSService.class).savePatientContact(patientContact);
+						addRelationship(indexCase, patient);
+						System.out.println("Successfully added patient contact " + clientName + " for case " + contactWithConfirmedCase);
+					}
+				}
+			}
+
+			if (dateOfOutcome != null && org.apache.commons.lang3.StringUtils.isNotBlank(outcome) && (outcome.equalsIgnoreCase("DISCHARGE") || outcome.equalsIgnoreCase("DEAD"))) {
+				discontinueCaseFromCovidInvestigationProgram(patient, dateOfOutcome.before(dateConfirmedPositive) ? dateConfirmedPositive : dateOfOutcome , outcome);
+			}
 			if (counter % 200 == 0) {
 				Context.flushSession();
 				Context.clearSession();
@@ -891,7 +970,82 @@ public class SpreadsheetImportUtil {
 		}
 	}
 
-	private static Patient createPatient(String fullName, Integer age, String sex, String idNo, String caseId) {
+	private static PatientContact createPatientContact(String fullName, Integer age, String sex) {
+
+		PatientContact patientContact = null;
+
+
+		fullName = fullName.replace(".","");
+		fullName = fullName.replace(",", "");
+		fullName = fullName.replace("'", "");
+		fullName = fullName.replace("  ", " ");
+
+		String fName = "", mName = "", lName = "";
+		if (fullName != null && !fullName.equals("")) {
+
+			String [] nameParts = fullName.trim().split(" ");
+			fName = nameParts[0].trim();
+			if (nameParts.length > 1) {
+				lName = nameParts[1].trim();
+			} else {
+				lName = nameParts[0].trim();
+			}
+			if (nameParts.length > 2) {
+				mName = nameParts[2].trim();
+			}
+
+			fName = fName != null && !fName.equals("") ? fName : "";
+			mName = mName != null && !mName.equals("") ? mName : "";
+			lName = lName != null && !lName.equals("") ? lName : "";
+			patientContact = new PatientContact();
+			if (sex == null || sex.equals("") || StringUtils.isEmpty(sex)) {
+				sex = "U";
+			}
+			patientContact.setSex(sex);
+			patientContact.setFirstName(fName);
+			patientContact.setLastName(lName);
+			if (mName != null && !mName.equals("")) {
+				patientContact.setMiddleName(mName);
+			}
+
+
+			if (age == null) {
+				age = 100;
+			}
+			Calendar effectiveDate = Calendar.getInstance();
+			effectiveDate.set(2020, 3, 1, 0, 0);
+
+			Calendar computedDob = Calendar.getInstance();
+			computedDob.setTimeInMillis(effectiveDate.getTimeInMillis());
+			computedDob.add(Calendar.YEAR, -age);
+
+			if (computedDob != null) {
+				patientContact.setBirthDate(computedDob.getTime());
+			}
+
+		}
+		return patientContact;
+	}
+
+	private static void addRelationship(Person indexCase, Person contact) {
+		String traveledTogetherRelType = "8ea992ac-6ed3-11ea-bc55-0242ac130003";
+
+		Person personA = null, personB = null;
+		RelationshipType type = null;
+
+		personA = contact;
+		personB = indexCase;
+		type = Context.getPersonService().getRelationshipTypeByUuid(traveledTogetherRelType);
+
+		Relationship rel = new Relationship();
+		rel.setRelationshipType(type);
+		rel.setPersonA(personA);
+		rel.setPersonB(personB);
+
+		Context.getPersonService().saveRelationship(rel);
+	}
+
+	private static Patient createPatient(String fullName, Integer age, String sex, String idNo, String caseId, Date dateOfDeath) {
 
 		Patient patient = null;
 		String PATIENT_CLINIC_NUMBER = "b4d66522-11fc-45c7-83e3-39a1af21ae0d";
@@ -947,6 +1101,12 @@ public class SpreadsheetImportUtil {
 
 			if (computedDob != null) {
 				patient.setBirthdate(computedDob.getTime());
+			}
+
+			if (dateOfDeath != null) {
+				patient.setDead(true);
+				patient.setDeathDate(dateOfDeath);
+				patient.setCauseOfDeath(Context.getConceptService().getConcept(113021));
 			}
 
 			patient.setBirthdateEstimated(true);
@@ -1220,7 +1380,7 @@ public class SpreadsheetImportUtil {
 		// set traveled from
 		ConceptService conceptService = Context.getConceptService();
 		Obs o = new Obs();
-		o.setConcept(conceptService.getConcept("165198"));
+		o.setConcept(conceptService.getConcept(165198));
 		o.setDateCreated(new Date());
 		o.setCreator(Context.getUserService().getUser(1));
 		o.setLocation(enc.getLocation());
@@ -1230,7 +1390,7 @@ public class SpreadsheetImportUtil {
 
 		// date of arrival
         Obs ad = new Obs();
-        ad.setConcept(conceptService.getConcept("160753"));
+        ad.setConcept(conceptService.getConcept(160753));
         ad.setDateCreated(new Date());
         ad.setCreator(Context.getUserService().getUser(1));
         ad.setLocation(enc.getLocation());
@@ -1241,17 +1401,17 @@ public class SpreadsheetImportUtil {
 		// default all to flight
 
 		Obs o1 = new Obs();
-		o1.setConcept(conceptService.getConcept("1375"));
+		o1.setConcept(conceptService.getConcept(1375));
 		o1.setDateCreated(new Date());
 		o1.setCreator(Context.getUserService().getUser(1));
 		o1.setLocation(enc.getLocation());
 		o1.setObsDatetime(admissionDate);
 		o1.setPerson(patient);
-		o1.setValueCoded(conceptService.getConcept("1378"));
+		o1.setValueCoded(conceptService.getConcept(1378));
 
 		if (org.apache.commons.lang3.StringUtils.isNotBlank(flightNumber)) {
 			Obs fNo = new Obs();
-			fNo.setConcept(conceptService.getConcept("162086"));
+			fNo.setConcept(conceptService.getConcept(162086));
 			fNo.setDateCreated(new Date());
 			fNo.setCreator(Context.getUserService().getUser(1));
 			fNo.setLocation(enc.getLocation());
@@ -1268,8 +1428,55 @@ public class SpreadsheetImportUtil {
 
 	}
 
+	private static void discontinueCaseFromCovidInvestigationProgram(Patient patient, Date discontinuationDate, String discontinuationReason) {
 
-	private static Patient saveAndenrollPatientInCovidQuarantine(Patient patient, Date admissionDate, String quarantineCenter) {
+		PatientProgram lastEnrollment = getActiveProgram(patient, COVID_19_CASE_INVESTIGATION_PROGRAM);
+		if (lastEnrollment != null) {
+			lastEnrollment.setDateCompleted(discontinuationDate);
+			Context.getProgramWorkflowService().savePatientProgram(lastEnrollment);
+		}
+
+		Encounter enc = new Encounter();
+		enc.setEncounterType(Context.getEncounterService().getEncounterTypeByUuid(COVID_OUTCOME_ENCOUNTER));
+		enc.setEncounterDatetime(discontinuationDate);
+		enc.setPatient(patient);
+		enc.addProvider(Context.getEncounterService().getEncounterRole(1), Context.getProviderService().getProvider(1));
+		enc.setForm(Context.getFormService().getFormByUuid(COVID_OUTCOME_FORM));
+
+
+		// set discontinuation reason
+		ConceptService conceptService = Context.getConceptService();
+		Obs o = new Obs();
+		o.setConcept(conceptService.getConcept(161555));
+		o.setDateCreated(new Date());
+		o.setCreator(Context.getUserService().getUser(1));
+		o.setLocation(enc.getLocation());
+		o.setObsDatetime(discontinuationDate);
+		o.setPerson(patient);
+		if (org.apache.commons.lang3.StringUtils.isNotBlank(discontinuationReason)) {
+			if (discontinuationReason.equalsIgnoreCase("DISCHARGE")) {
+				o.setValueCoded(conceptService.getConcept(664));
+			} else if (discontinuationReason.equalsIgnoreCase("DEAD")) {
+				o.setValueCoded(conceptService.getConcept(160034));
+			}
+		}
+		enc.addObs(o);
+		Context.getEncounterService().saveEncounter(enc);
+
+	}
+
+	/**
+	 * Checks if a contact is enrolled in a program
+	 * @param patient
+	 * @return
+	 */
+	public static PatientProgram getActiveProgram(Patient patient, String programUUID) {
+		ProgramWorkflowService service = Context.getProgramWorkflowService();
+		List<PatientProgram> programs = service.getPatientPrograms(patient, service.getProgramByUuid(programUUID), null, null, null,null, true);
+		return programs.size() > 0 ? programs.get(programs.size() - 1) : null;
+	}
+
+	private static Patient saveAndenrollPatientInCovidQuarantine(Patient patient, Date admissionDate, String quarantineCenter, Date discontinuationDate, String referralFacility) {
 
 		Encounter enc = new Encounter();
 		enc.setEncounterType(Context.getEncounterService().getEncounterTypeByUuid(COVID_QUARANTINE_ENROLLMENT_ENCOUNTER));
@@ -1278,11 +1485,10 @@ public class SpreadsheetImportUtil {
 		enc.addProvider(Context.getEncounterService().getEncounterRole(1), Context.getProviderService().getProvider(1));
 		enc.setForm(Context.getFormService().getFormByUuid(COVID_QUARANTINE_ENROLLMENT_FORM));
 
-
 		// set quarantine center
 		ConceptService conceptService = Context.getConceptService();
 		Obs o = new Obs();
-		o.setConcept(conceptService.getConcept("162724"));
+		o.setConcept(conceptService.getConcept(162724));
 		o.setDateCreated(new Date());
 		o.setCreator(Context.getUserService().getUser(1));
 		o.setLocation(enc.getLocation());
@@ -1292,13 +1498,13 @@ public class SpreadsheetImportUtil {
 
 		// default all admissions type to new
 		Obs o1 = new Obs();
-		o1.setConcept(conceptService.getConcept("161641"));
+		o1.setConcept(conceptService.getConcept(161641));
 		o1.setDateCreated(new Date());
 		o1.setCreator(Context.getUserService().getUser(1));
 		o1.setLocation(enc.getLocation());
 		o1.setObsDatetime(admissionDate);
 		o1.setPerson(patient);
-		o1.setValueCoded(conceptService.getConcept("164144"));
+		o1.setValueCoded(conceptService.getConcept(164144));
 		enc.addObs(o);
 		enc.addObs(o1);
 
@@ -1309,13 +1515,61 @@ public class SpreadsheetImportUtil {
 		pp.setPatient(patient);
 		pp.setProgram(Context.getProgramWorkflowService().getProgramByUuid(COVID_QUARANTINE_PROGRAM));
 		pp.setDateEnrolled(admissionDate);
+		if (discontinuationDate != null) {
+			pp.setDateCompleted(discontinuationDate);
+		}
 		pp.setDateCreated(new Date());
 		Context.getProgramWorkflowService().savePatientProgram(pp);
+
+		if (discontinuationDate != null) {
+			Encounter discEnc = new Encounter();
+			discEnc.setEncounterType(Context.getEncounterService().getEncounterTypeByUuid(COVID_QUARANTINE_OUTCOME_ENCOUNTER));
+			discEnc.setEncounterDatetime(discontinuationDate);
+			discEnc.setPatient(patient);
+			discEnc.addProvider(Context.getEncounterService().getEncounterRole(1), Context.getProviderService().getProvider(1));
+			discEnc.setForm(Context.getFormService().getFormByUuid(COVID_QUARANTINE_OUTCOME_FORM));
+
+
+			// set discontinuation reason to referral
+			Obs oDiscReason = new Obs();
+			oDiscReason.setConcept(conceptService.getConcept(161555));
+			oDiscReason.setDateCreated(discontinuationDate);
+			oDiscReason.setCreator(Context.getUserService().getUser(1));
+			oDiscReason.setLocation(enc.getLocation());
+			oDiscReason.setObsDatetime(discontinuationDate);
+			oDiscReason.setPerson(patient);
+			oDiscReason.setValueCoded(conceptService.getConcept(164165));
+			discEnc.addObs(oDiscReason);
+
+			Obs oReferral = new Obs();
+			oReferral.setConcept(conceptService.getConcept(159623));
+			oReferral.setDateCreated(discontinuationDate);
+			oReferral.setCreator(Context.getUserService().getUser(1));
+			oReferral.setLocation(enc.getLocation());
+			oReferral.setObsDatetime(discontinuationDate);
+			oReferral.setPerson(patient);
+			oReferral.setValueCoded(conceptService.getConcept(1185));
+			discEnc.addObs(oReferral);
+
+			if (org.apache.commons.lang3.StringUtils.isNotBlank(referralFacility)) {
+				Obs oReferralFacility = new Obs();
+				oReferralFacility.setConcept(conceptService.getConcept(161562));
+				oReferralFacility.setDateCreated(discontinuationDate);
+				oReferralFacility.setCreator(Context.getUserService().getUser(1));
+				oReferralFacility.setLocation(enc.getLocation());
+				oReferralFacility.setObsDatetime(discontinuationDate);
+				oReferralFacility.setPerson(patient);
+				oReferralFacility.setValueText(referralFacility);
+				discEnc.addObs(oReferralFacility);
+			}
+			Context.getEncounterService().saveEncounter(discEnc);
+
+		}
 
 		return patient;
 	}
 
-	private static Patient enrollInCovidCaseInvestigationProgram(Patient patient, Date admissionDate, String county, String subCounty, String detectionPoint, String healthFacility, String travelHistory, String contactWithCase, String labName, Date baselineLabTestDate, String labResult, String hasSymptoms, Date symptomsOnsetDate, String hasCough,String hasFever,String hasDifficultyBreathing,String hasOtherSymptoms,String visitedHealthFacility,String dateVisitedHealthFacility,String hospitalization, String occupation) {
+	private static Patient enrollInCovidCaseInvestigationProgram(Patient patient, Date admissionDate, String county, String subCounty, String detectionPoint, String healthFacility, String travelHistory, String contactWithCase, String labName, Date baselineLabTestDate, Date dateConfirmedPositive, String labResult, String hasSymptoms, Date symptomsOnsetDate, String hasCough,String hasFever,String hasDifficultyBreathing,String hasOtherSymptoms,String visitedHealthFacility,String dateVisitedHealthFacility,String hospitalization, String occupation) {
 
 
 		Integer symptomaticConcept = 1729;//1065,1066,1067
@@ -1528,7 +1782,7 @@ public class SpreadsheetImportUtil {
 		}
 
 		//hospitalization
-		if (hospitalization != null && !hospitalization.equals("")) {
+		if (org.apache.commons.lang3.StringUtils.isNotBlank(hospitalization) || org.apache.commons.lang3.StringUtils.isNotBlank(healthFacility)) {
 			Obs oHosp = new Obs();
 			oHosp.setConcept(conceptService.getConcept(admittedToHospitalConcept));
 			oHosp.setDateCreated(new Date());
@@ -1578,12 +1832,12 @@ public class SpreadsheetImportUtil {
 		Context.getProgramWorkflowService().savePatientProgram(pp);
 
 		// save baseline lab
-		saveLabOrder(patient, enc, labName, baselineLabTestDate, "baseline", labResult);
+		saveLabOrder(patient, enc, labName, baselineLabTestDate, dateConfirmedPositive, "baseline", labResult);
 
 		return patient;
 	}
 
-	private static void saveLabOrder (Patient patient, Encounter encounter, String testingLab, Date encDate, String orderReason, String labResult ) {
+	private static void saveLabOrder (Patient patient, Encounter encounter, String testingLab, Date orderDate, Date resultDate, String orderReason, String labResult ) {
 
 		ConceptService conceptService = Context.getConceptService();
 		String TEST_ORDER_TYPE_UUID = "52a447d3-a64a-11e3-9aeb-50e549534c5e";
@@ -1598,7 +1852,7 @@ public class SpreadsheetImportUtil {
 
 		Encounter enc = new Encounter();
 		enc.setEncounterType(labEncounterType);
-		enc.setEncounterDatetime(encDate);
+		enc.setEncounterDatetime(orderDate);
 		enc.setPatient(patient);
 		enc.addProvider(Context.getEncounterService().getEncounterRole(1), Context.getProviderService().getProvider(1));
 		Encounter savedEnc = Context.getEncounterService().saveEncounter(enc);
@@ -1608,7 +1862,7 @@ public class SpreadsheetImportUtil {
 		anOrder.setPatient(patient);
 		anOrder.setCareSetting(new CareSetting());
 		anOrder.setConcept(conceptService.getConceptByUuid(COVID_19_LAB_TEST_CONCEPT));
-		anOrder.setDateActivated(encDate);
+		anOrder.setDateActivated(orderDate);
 		anOrder.setCommentToFulfiller(testingLab != null ? testingLab : "NIC"); //place holder for now
 		anOrder.setInstructions("OP and NP Swabs");
 		anOrder.setOrderer(Context.getProviderService().getProvider(1));
@@ -1635,7 +1889,7 @@ public class SpreadsheetImportUtil {
 
 		Encounter resEnc = new Encounter();
 		resEnc.setEncounterType(labEncounterType);
-		resEnc.setEncounterDatetime(new Date());
+		resEnc.setEncounterDatetime(resultDate);
 		resEnc.setPatient(patient);
 		resEnc.setCreator(Context.getUserService().getUser(1));
 
@@ -1643,7 +1897,7 @@ public class SpreadsheetImportUtil {
 		res.setConcept(covidTestConcept);
 		res.setDateCreated(new Date());
 		res.setCreator(Context.getUserService().getUser(1));
-		res.setObsDatetime(new Date());
+		res.setObsDatetime(resultDate);
 		res.setPerson(od.getPatient());
 		res.setOrder(od);
 		res.setValueCoded(labResult.equals("Negative") ? covidNegConcept : labResult.equals("Positive") ? covidPosConcept : covidIndeterminateConcept);

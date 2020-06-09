@@ -94,12 +94,19 @@ lib/poi-ooxml-3.6-20091214.jar
 				<version>${idgenVersion}</version>
 				<scope>provided</scope>
 			</dependency>
+			<dependency>
+				<groupId>org.openmrs.module</groupId>
+				<artifactId>hivtestingservices-api</artifactId>
+				<version>${hivTestingVersion}</version>
+				<scope>provided</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
 	<properties>
 		<openMRSVersion>1.12.1</openMRSVersion>
 		<idgenVersion>2.6</idgenVersion>
+		<hivTestingVersion>1.1.4</hivTestingVersion>
 	</properties>
 
 	<build>
