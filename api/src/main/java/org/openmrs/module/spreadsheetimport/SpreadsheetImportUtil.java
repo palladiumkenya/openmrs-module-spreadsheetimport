@@ -26,6 +26,7 @@ import org.openmrs.CareSetting;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
+import org.openmrs.Form;
 import org.openmrs.GlobalProperty;
 import org.openmrs.Location;
 import org.openmrs.Obs;
@@ -45,6 +46,7 @@ import org.openmrs.TestOrder;
 import org.openmrs.api.APIException;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.EncounterService;
+import org.openmrs.api.FormService;
 import org.openmrs.api.OrderContext;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
@@ -61,6 +63,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -298,7 +301,8 @@ public class SpreadsheetImportUtil {
 		}
 		
 		// Header row
-		Row firstRow = sheet.getRow(0);
+		//Row firstRow = sheet.getRow(0);
+		Row firstRow = sheet.getRow(4);// added for regimen line cleanup
 		if (firstRow == null) {
 			messages.add("Spreadsheet header row must not be null");
 			return null;
@@ -331,7 +335,8 @@ public class SpreadsheetImportUtil {
 		
 		// Process rows
 		//importQuarantineList(sheet);
-		importPositiveCases(sheet);
+		//importPositiveCases(sheet);
+		updateRegimenLine(sheet);
 
 		
 		// write back Excel file to a temp location
@@ -1913,6 +1918,159 @@ public class SpreadsheetImportUtil {
 		}
 
 	}
+
+	private static void updateRegimenLine(Sheet sheet) {
+
+		FormService formService = Context.getFormService();
+		EncounterService encounterService = Context.getEncounterService();
+		ConceptService conceptService = Context.getConceptService();
+		String DRUG_REGIMEN_EDITOR_ENCOUNTER = "7dffc392-13e7-11e9-ab14-d663bd873d93";
+		String DRUG_REGIMEN_EDITOR_FORM = "da687480-e197-11e8-9f32-f2801f1b9fd1";
+
+
+		String ARV_TREATMENT_PLAN_EVENT_CONCEPT = "1255AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+		String TB_TREATMENT_PLAN_CONCEPT = "1268AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+		/*List<SimpleObject> history = new ArrayList<SimpleObject>();
+		String categoryConceptUuid = category.equals("ARV")? ARV_TREATMENT_PLAN_EVENT_CONCEPT : TB_TREATMENT_PLAN_CONCEPT;*/
+
+		EncounterType et = encounterService.getEncounterTypeByUuid(DRUG_REGIMEN_EDITOR_ENCOUNTER);
+		Form form = formService.getFormByUuid(DRUG_REGIMEN_EDITOR_FORM);
+		String dateFormat = "dd/MM/yyyy";
+
+		boolean start = true;
+		int counter = 0;
+		int dataRowNum = 4;
+
+		for (Row row : sheet) {
+
+			if (counter < dataRowNum) {
+				counter++;
+				continue;
+			}
+
+			counter++;
+
+			if (start) {
+				start = false;
+				continue;
+			}
+
+
+			//Entry ID	Name	Unique Patient Number	DOB	Sex	Regimen	Date started on Regimen	Regimen Line
+
+			int colEntryId = 0;//test lab name
+			int colPatientName = 1;//specimen id
+			int colUniquePatientNumber = 2;
+			int colDOB = 3;//dob
+			int colSex = 4;//sex
+			int colRegimen = 5;
+			int colDateStartedOnRegimen = 6;
+			int colRegimenLine = 7;
+
+			DataFormatter formatter = new DataFormatter();
+			String encounterId = formatter.formatCellValue(row.getCell(colEntryId));
+			String patientName = formatter.formatCellValue(row.getCell(colPatientName));
+			String uniquePatientNumber = formatter.formatCellValue(row.getCell(colUniquePatientNumber));
+			String regimenName = formatter.formatCellValue(row.getCell(colRegimen));
+			String regimenLine = formatter.formatCellValue(row.getCell(colRegimenLine));
+
+			String regimenDate = formatter.formatCellValue(row.getCell(colDateStartedOnRegimen));
+			regimenDate = regimenDate.replace(".", "/");
+			uniquePatientNumber = uniquePatientNumber.replace("'", "");
+
+			if (org.apache.commons.lang3.StringUtils.isBlank(regimenLine)) {
+
+				System.out.print("Skipping this row. It has empty result ");
+				System.out.print("Patient Name, Regimen date, regimen: ");
+				System.out.println(patientName + " ," + regimenDate + ", " + regimenName );
+				continue;
+			}
+			Patient p = checkIfPatientExists(uniquePatientNumber);
+			if (p == null) {
+				System.out.println("A patient with identifier " + uniquePatientNumber + " does not exists. Skipping this row");
+				continue;
+			}
+			Date regimenEventDate = null;
+			List<String> dateFormats = new ArrayList<String>();
+
+			//dateFormats.add("dd-MM-yyyy");
+			//dateFormats.add("dd/MM/yyyy");
+			//dateFormats.add("dd-MMM-yyyy");
+
+			/*for (String format : dateFormats) {
+				try {
+					regimenEventDate = new SimpleDateFormat(format).parse(regimenDate);
+					break;
+				} catch (ParseException e) {
+
+				}
+			}*/
+
+			try {
+				regimenEventDate = new SimpleDateFormat(dateFormat).parse(regimenDate);
+				break;
+			} catch (ParseException e) {
+
+			}
+
+			if (regimenDate == null) {
+				System.out.println("Could not convert the regimen date. Skipping processing of the row");
+				continue;
+			}
+
+			System.out.print("Patient Name, Regimen date, regimen: ");
+			System.out.println(patientName + " ," + regimenDate + ", " + regimenName );
+
+			Encounter regimenEventEncounter = getEncounterOnDate(et, form, p, regimenEventDate);
+
+			if (regimenEventEncounter != null) {
+				// compose the regimen line obs and add it to the encounter
+				// create obs for regimen line
+
+				String regimenLineToSave = null;
+				if (regimenLine.equals("Adult First line")) {
+					regimenLineToSave = "AF";
+				} else if (regimenLine.equals("Adult Second line")) {
+					regimenLineToSave = "AS";
+				} else if (regimenLine.equals("Adult Third line")) {
+					regimenLineToSave = "AT";
+				} else if (regimenLine.equals("Child First line")) {
+					regimenLineToSave = "CF";
+				} else if (regimenLine.equals("Child Second line")) {
+					regimenLineToSave = "CS";
+				} else if (regimenLine.equals("Child Third line")) {
+					regimenLineToSave = "CT";
+				}
+				/**
+				 * Adult First line
+				 Adult Second line
+				 Adult Third line
+				 Child First line
+				 Child Second line
+				 Child Third line
+				 */
+
+				/*Obs regimenLineObs = new Obs();
+				regimenLineObs.setConcept(conceptService.getConcept(163104)); // regimen line concept should be changed to correct one
+				regimenLineObs.setDateCreated(new Date());
+				regimenLineObs.setCreator(Context.getAuthenticatedUser());
+				regimenLineObs.setObsDatetime(regimenEventEncounter.getEncounterDatetime());
+				regimenLineObs.setValueText(regimenLineToSave);
+				regimenLineObs.setPerson(p);
+
+				regimenEventEncounter.addObs(regimenLineObs);
+				encounterService.saveEncounter(regimenEventEncounter);*/
+				System.out.println("successfully updated an encounter");
+
+			}
+
+			if (counter % 200 == 0) {
+				Context.flushSession();
+				Context.clearSession();
+
+			}
+		}
+	}
 	private static PatientIdentifier generateOpenMRSID() {
 		PatientIdentifierType openmrsIDType = Context.getPatientService().getPatientIdentifierTypeByUuid("dfacd928-0370-4315-99d7-6ec1c9f7ae76");
 		String generated = Context.getService(IdentifierSourceService.class).generateIdentifier(openmrsIDType, "Registration");
@@ -1932,6 +2090,37 @@ public class SpreadsheetImportUtil {
 			Context.removeProxyPrivilege(PrivilegeConstants.VIEW_LOCATIONS);
 			Context.removeProxyPrivilege(PrivilegeConstants.VIEW_GLOBAL_PROPERTIES);
 		}
+
+	}
+
+	/**
+	 * Checks if a patient already has encounter of same type and form on same date
+	 * @param enctype
+	 * @param form
+	 * @param patient
+	 * @param date
+	 * @return
+	 */
+	public static boolean hasEncounterOnDate(EncounterType enctype, Form form, Patient patient, Date date) {
+		List<Encounter> encounters = Context.getEncounterService().getEncounters(patient, null, date, date, Collections.singleton(form), Collections.singleton(enctype), null, null, null, false);
+		return encounters.size() > 0;
+
+	}
+
+	/**
+	 * Checks if a patient already has encounter of same type and form on same date
+	 * @param enctype
+	 * @param form
+	 * @param patient
+	 * @param date
+	 * @return the encounter on the request date
+	 */
+	public static Encounter getEncounterOnDate(EncounterType enctype, Form form, Patient patient, Date date) {
+		List<Encounter> encounters = Context.getEncounterService().getEncounters(patient, null, date, date, Collections.singleton(form), Collections.singleton(enctype), null, null, null, false);
+		if (encounters.size() > 0) {
+			return encounters.get(0); // just return the first
+		}
+		return null;
 
 	}
 
