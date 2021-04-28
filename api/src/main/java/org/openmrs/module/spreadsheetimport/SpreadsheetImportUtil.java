@@ -13,6 +13,7 @@
  */
 package org.openmrs.module.spreadsheetimport;
 
+import org.apache.commons.lang3.time.DateUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.poi.ss.usermodel.Cell;
@@ -21,39 +22,20 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.openmrs.Attributable;
 import org.openmrs.CareSetting;
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
 import org.openmrs.EncounterType;
 import org.openmrs.Form;
-import org.openmrs.GlobalProperty;
-import org.openmrs.Location;
 import org.openmrs.Obs;
 import org.openmrs.Order;
+import org.openmrs.OrderType;
 import org.openmrs.Patient;
-import org.openmrs.PatientIdentifier;
-import org.openmrs.PatientIdentifierType;
-import org.openmrs.PatientProgram;
-import org.openmrs.Person;
-import org.openmrs.PersonAddress;
-import org.openmrs.PersonAttribute;
-import org.openmrs.PersonAttributeType;
-import org.openmrs.PersonName;
-import org.openmrs.Relationship;
-import org.openmrs.RelationshipType;
-import org.openmrs.TestOrder;
-import org.openmrs.api.APIException;
 import org.openmrs.api.ConceptService;
 import org.openmrs.api.EncounterService;
 import org.openmrs.api.FormService;
-import org.openmrs.api.OrderContext;
-import org.openmrs.api.ProgramWorkflowService;
+import org.openmrs.api.OrderService;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.hivtestingservices.api.HTSService;
-import org.openmrs.module.hivtestingservices.api.PatientContact;
-import org.openmrs.module.idgen.service.IdentifierSourceService;
-import org.openmrs.util.PrivilegeConstants;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -62,9 +44,9 @@ import java.io.FileOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,41 +60,17 @@ public class SpreadsheetImportUtil {
 	
 	/** Logger for this class and subclasses */
 	protected static final Log log = LogFactory.getLog(SpreadsheetImportUtil.class);
-	public static final String COVID_QUARANTINE_ENROLLMENT_ENCOUNTER = "33a3a55c-73ae-11ea-bc55-0242ac130003";
-	public static final String COVID_QUARANTINE_OUTCOME_ENCOUNTER = "33a3a7be-73ae-11ea-bc55-0242ac130003";
 
-	public static final String COVID_QUARANTINE_ENROLLMENT_FORM = "9a5d57b6-739a-11ea-bc55-0242ac130003";
-	public static final String COVID_QUARANTINE_OUTCOME_FORM = "9a5d58c4-739a-11ea-bc55-0242ac130003";
-
-	public static final String COVID_QUARANTINE_PROGRAM = "9a5d555e-739a-11ea-bc55-0242ac130003";
-    public static final String COVID_19_TRAVEL_HISTORY_ENCOUNTER = "50a59411-921b-435a-9109-42aa68ee7aa7";
-    public static final String COVID_19_TRAVEL_HISTORY_FORM = "87513b50-6ced-11ea-bc55-0242ac130003";
-	public static final String CONSULTATION = "465a92f2-baf8-42e9-9612-53064be868e8";
-
-
-	public static final String COVID_19_CASE_INVESTIGATION_FORM = "0fe60b26-8648-438b-afea-8841dcd993c6";
-	public static final String COVID_OUTCOME_FORM = "8f4e3e83-c597-47ad-8999-b788e8255d20";
-	public static final String COVID_19_CASE_INVESTIGATION_ENCOUNTER = "a4414aee-6832-11ea-bc55-0242ac130003";
-	public static final String COVID_OUTCOME_ENCOUNTER = "7b118dac-6f61-4466-ad1a-7e01aca077ad";
-
-	public static final String COVID_19_CASE_INVESTIGATION_PROGRAM = "e7ee7548-6958-4361-bed9-ee2614423947";
-	public static final String COVID_19_LAB_TEST_CONCEPT = "165611AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String COVID_19_BASELINE_TEST_CONCEPT = "162080AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String COVID_19_1ST_FOLLOWUP_TEST_CONCEPT = "162081AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String COVID_19_2ND_FOLLOWUP_TEST_CONCEPT = "164142AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String COVID_19_3RD_FOLLOWUP_TEST_CONCEPT = "159490AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String COVID_19_4TH_FOLLOWUP_TEST_CONCEPT = "159489AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String COVID_19_5TH_FOLLOWUP_TEST_CONCEPT = "161893AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String REPORTING_COUNTY = "165197AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String REPORTING_SUB_COUNTY = "161551AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String HISTORY_OF_TRAVEL = "162619AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String REPORTING_HEALTH_FACILITY = "161550AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String YES_CONCEPT = "1065AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String NO_CONCEPT = "1066AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	public static final String CONTACT_WITH_SUSPECTED_CASE = "162633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-
-
-
+	public static final String LAB_ORDER_ENCOUNTER_TYPE_UUID = "e1406e88-e9a9-11e8-9f32-f2801f1b9fd1";
+	public static final String LAB_RESULT_ENCOUNTER_TYPE_UUID = "17a381d1-7e29-406a-b782-aa903b963c28";
+	public static final String LAB_RESULT_FORM_UUID = "7e603909-9ed5-4d0c-a688-26ecb05d8b6e";
+	public static Concept vlTestConceptQualitative = Context.getConceptService().getConcept(1305);
+	public static Concept LDLConcept = Context.getConceptService().getConcept(1302);
+	public static Concept vlTestConceptQuantitative = Context.getConceptService().getConcept(856);
+	public static EncounterType labEncounterType = Context.getEncounterService().getEncounterTypeByUuid(LAB_ORDER_ENCOUNTER_TYPE_UUID);
+	public static EncounterType labResultEncounterType = Context.getEncounterService().getEncounterTypeByUuid(LAB_RESULT_ENCOUNTER_TYPE_UUID);
+	public static Form labResultForm = Context.getFormService().getFormByUuid(LAB_RESULT_FORM_UUID);
+	public static OrderType labType = Context.getOrderService().getOrderTypeByUuid(OrderType.TEST_ORDER_TYPE_UUID);
 
 	/**
 	 * Resolve template dependencies: 1. Generate pre-specified values which are necessary for
@@ -293,17 +251,25 @@ public class SpreadsheetImportUtil {
 		
 		// Open file
 		Workbook wb = WorkbookFactory.create(file.getInputStream());
-		System.out.println("Workbood properties: " + wb.getNumberOfSheets());
+		System.out.println("Workbook properties: " + wb.getNumberOfSheets());
 		Sheet sheet;
 		if (!StringUtils.hasText(sheetName)) {
 			sheet = wb.getSheetAt(0);
 		} else {
 			sheet = wb.getSheet(sheetName);
 		}
-		
+
+
 		// Header row
-		//Row firstRow = sheet.getRow(0);
-		Row firstRow = sheet.getRow(4);// added for regimen line cleanup
+		String templateName = template.getName();
+		Row firstRow = null;
+		// make sure the templates conform to the below naming convention
+		if (templateName.equalsIgnoreCase("Update regimen lines")) {
+			firstRow = sheet.getRow(4);
+		} else if (templateName.equalsIgnoreCase("Update VL results")) {
+			firstRow = sheet.getRow(0);
+		}
+
 		if (firstRow == null) {
 			messages.add("Spreadsheet header row must not be null");
 			return null;
@@ -335,9 +301,12 @@ public class SpreadsheetImportUtil {
 		}
 		
 		// Process rows
-		//importQuarantineList(sheet);
-		//importPositiveCases(sheet);
-		updateRegimenLine(sheet);
+		if (templateName.equalsIgnoreCase("Update regimen lines")) {
+			updateRegimenLine(sheet);
+		} else if (templateName.equalsIgnoreCase("Update VL results")) {
+			importViralLoadResults(sheet);
+		}
+
 
 		
 		// write back Excel file to a temp location
@@ -402,8 +371,6 @@ public class SpreadsheetImportUtil {
 			int colEntryId = 0;//test lab name
 			int colPatientName = 1;//specimen id
 			int colUniquePatientNumber = 2;
-			int colDOB = 3;//dob
-			int colSex = 4;//sex
 			int colRegimen = 5;
 			int colDateStartedOnRegimen = 6;
 			int colRegimenLine = 7;
@@ -516,6 +483,228 @@ public class SpreadsheetImportUtil {
 		}
 	}
 
+
+	/**
+	 * Imports an excel with viral load results from the lab system (EID/VL lab system)
+	 * @param sheet
+	 */
+	public static void importViralLoadResults(Sheet sheet) {
+
+		String dateFormat = "d-MMM-yy";// As provided in the results excel document
+
+		boolean start = true;
+		int counter = 0;
+
+		for (Row row : sheet) {
+
+			counter++;
+
+			if (start) {
+				start = false;
+				continue;
+			}
+
+			// define indexes for the columns. element at position 0 is the entry id
+			int colUniquePatientNumber = 1;
+			int colDateVlOrdered = 6;
+			int colVlResult = 7;
+
+			DataFormatter formatter = new DataFormatter();
+			String uniquePatientNumber = formatter.formatCellValue(row.getCell(colUniquePatientNumber));
+			String vlResult = formatter.formatCellValue(row.getCell(colVlResult));
+
+			String dateVlOrdered = formatter.formatCellValue(row.getCell(colDateVlOrdered));
+
+			if (org.apache.commons.lang3.StringUtils.isBlank(vlResult)) {
+
+				System.out.print("Skipping this row. It has empty result ");
+				continue;
+			}
+			// check if patient really exists in the database
+			Patient p = checkIfPatientExists(uniquePatientNumber);
+			if (p == null) {
+				System.out.println("A patient with identifier " + uniquePatientNumber + " does not exists. Skipping this row");
+				continue;
+			} else {
+				System.out.println("A patient with identifier " + uniquePatientNumber + " exists. Processing the row");
+			}
+			// get vl order date
+			Date vlOrderDate = null;
+
+			try {
+				vlOrderDate = new SimpleDateFormat(dateFormat).parse(dateVlOrdered);
+			} catch (ParseException e) {
+
+			}
+
+			if (vlOrderDate == null) {
+				System.out.println("Could not convert the vl order date. Skipping processing of the row " + dateVlOrdered);
+				continue;
+			}
+
+			if (p != null && vlOrderDate != null && org.apache.commons.lang3.StringUtils.isNotBlank(vlResult)) {
+				System.out.println("This row will process " );
+
+				updateOrder(p, vlOrderDate, vlResult);
+				if (counter % 200 == 0) {
+					Context.flushSession();
+					Context.clearSession();
+				}
+			} else {
+				System.out.println("This row won't process " );
+
+			}
+		}
+	}
+
+	/**
+	 * Updates an active order and sets results if provided
+	 * @param patient
+	 * @param vlOrderDate
+	 * @param result
+	 */
+	public static void updateOrder(Patient patient, Date vlOrderDate, String result) {
+
+		Map<String, Order> ordersToProcess = getOrdersToProcess(patient, labType, null, vlOrderDate, vlTestConceptQuantitative);
+		Order orderToRetain = ordersToProcess.get("orderToRetain");
+		Order orderToVoid = ordersToProcess.get("orderToVoid");
+
+		Date orderDiscontinuationDate = aMomentBefore(new Date());
+
+		if (ordersToProcess != null && ordersToProcess.size() > 0) {
+			if (org.apache.commons.lang3.StringUtils.isNotBlank(result)) {
+
+				if (orderToRetain == null || orderToVoid == null) { // just skip if any of the orders is null
+					System.out.println("There is a null order in the package. This may be due to manual update by a provider or data clerk!");
+					return;
+				} else if (!orderToRetain.isActive() || !orderToVoid.isActive()) { // just skip if any of the orders is not active
+					System.out.println("There is no order to key in results for. This may have been done manually by a provider or data clerk!");
+					return;
+				}
+
+				Concept conceptToRetain = null;
+				String lDLResult = "0.01";
+				Obs o = new Obs();
+
+				if (result.equals(lDLResult)) {
+					conceptToRetain = vlTestConceptQualitative;
+					o.setValueCoded(LDLConcept);
+				} else {
+					conceptToRetain = vlTestConceptQuantitative;
+					o.setValueNumeric(Double.valueOf(result));
+				}
+
+				// In order to record results both qualitative (LDL) and quantitative,
+				// every vl request saves two orders: one with 856(quantitative) for numeric values and another with 1305(quantitative) for LDL value
+				// When recording result, it is therefore prudent to set result for one order and void the other one
+
+				// logic that picks the right concept id for the result obs
+				o.setConcept(conceptToRetain);
+				o.setDateCreated(orderDiscontinuationDate);
+				o.setCreator(Context.getUserService().getUser(1));
+				o.setObsDatetime(orderToRetain.getDateActivated());
+				o.setPerson(patient);
+				o.setOrder(orderToRetain);
+
+				Encounter enc = new Encounter();
+				enc.setEncounterType(labEncounterType);
+				enc.setEncounterDatetime(orderDiscontinuationDate);
+				enc.setPatient(patient);
+				enc.setCreator(Context.getUserService().getUser(1));
+
+				enc.addObs(o);
+				if (orderToRetain != null && orderToVoid != null && orderToRetain.isActive()) {
+
+					try {
+
+						Context.getEncounterService().saveEncounter(enc);
+						Context.getOrderService().discontinueOrder(orderToRetain, "Results received", orderDiscontinuationDate, orderToRetain.getOrderer(),
+								orderToRetain.getEncounter());
+						Context.getOrderService().voidOrder(orderToVoid, "Duplicate VL order");
+						System.out.println("Results updated successfully");
+
+						//check if there is already a lab result form updated with the same vl result. if found, void it plus the encounter
+
+						Encounter labResultsEncounter = getEncounterOnDate(labResultEncounterType, labResultForm, patient, vlOrderDate);
+						if (labResultsEncounter != null) {
+							//check to see if only vl was updated
+							if (labResultsEncounter.getObs().size() == 0) { // void both obs and encounter
+								for (Obs obs : labResultsEncounter.getObs()) {
+									obs.setVoided(true);
+									obs.setVoidReason("A duplicate obs has been created");
+									obs.setDateVoided(new Date());
+									Context.getObsService().saveObs(obs, "A duplicate obs has been created");
+								}
+								labResultsEncounter.setVoided(true);
+								labResultsEncounter.setVoidReason("A duplicate encounter has been created");
+								labResultsEncounter.setDateVoided(new Date());
+								Context.getEncounterService().saveEncounter(labResultsEncounter);
+							} else { // void only the vl obs
+								for (Obs obs : labResultsEncounter.getObs()) {
+									if (obs.getConcept().equals(conceptToRetain)) {
+										obs.setVoided(true);
+										obs.setVoidReason("A duplicate obs has been created");
+										obs.setDateVoided(new Date());
+										Context.getObsService().saveObs(obs, "A duplicate obs has been created");
+										break;
+									}
+								}
+							}
+						}
+
+						// this is really a hack to ensure that order date_stopped is filled, otherwise the order will remain active
+						// the issue here is that even though disc order is created, the original order is not stopped
+						// an alternative is to discontinue this order via REST which works well
+					} catch (Exception e) {
+						System.out.println("An error was encountered while updating orders for viral load");
+						e.printStackTrace();
+					}
+				}
+			}
+		} else {
+			System.out.println("There are no VL lab requests on the results date as indicated in the imported VL results document");
+		}
+
+	}
+
+	/**
+	 * Borrowed from OpenMRS core
+	 * To support MySQL datetime values (which are only precise to the second) we subtract one
+	 * second. Eventually we may move this method and enhance it to subtract the smallest moment the
+	 * underlying database will represent.
+	 *
+	 * @param date
+	 * @return one moment before date
+	 */
+	private static Date aMomentBefore(Date date) {
+		return DateUtils.addSeconds(date, -1);
+	}
+
+	/**
+	 * Returns an object indicating the order to retain and that to void
+	 * @param patient
+	 * @param orderType
+	 * @param careSetting
+	 * @param orderDate
+	 * @param conceptToRetain
+	 * @return
+	 */
+	private static Map<String, Order> getOrdersToProcess(Patient patient, OrderType orderType, CareSetting careSetting, Date orderDate, Concept conceptToRetain) {
+
+		Map<String, Order> listToProcess = new HashMap<String, Order>();
+		Concept conceptToVoid = conceptToRetain.equals(vlTestConceptQualitative) ? vlTestConceptQuantitative : vlTestConceptQualitative;
+		List<Order> ordersOnSameDay = Context.getOrderService().getActiveOrders(patient, orderType, careSetting, orderDate);
+
+		for (Order order : ordersOnSameDay) {
+			if (order.getConcept().equals(conceptToVoid)) {
+				listToProcess.put("orderToVoid", order);
+			} else if (order.getConcept().equals(conceptToRetain)) {
+				listToProcess.put("orderToRetain", order);
+			}
+		}
+		return listToProcess;
+	}
+
 	/**
 	 * Checks if a patient already has encounter of same type and form on same date
 	 * @param enctype
@@ -547,4 +736,19 @@ public class SpreadsheetImportUtil {
 
 	}
 
+	/**
+	 * Checks if a patient already has encounter of same type and form on same date
+	 * @param enctype
+	 * @param patient
+	 * @param date
+	 * @return the encounter on the request date
+	 */
+	public static Encounter getEncounterOnDate(EncounterType enctype, Patient patient, Date date) {
+		List<Encounter> encounters = Context.getEncounterService().getEncounters(patient, null, date, date, null, Collections.singleton(enctype), null, null, null, false);
+		if (encounters.size() > 0) {
+			return encounters.get(0); // just return the first
+		}
+		return null;
+
+	}
 }
