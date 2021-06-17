@@ -85,8 +85,8 @@ public class SpreadsheetImportImportFormController {
 			rollbackTransaction = false;
 		}
 		
-		File returnedFile = SpreadsheetImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
-		boolean succeeded = (returnedFile != null);
+		String serverResponse = SpreadsheetImportUtil.importTemplate(template, file, sheet, messages, rollbackTransaction);
+		boolean succeeded = serverResponse.equalsIgnoreCase("File processed successfully");
 
 		String messageString = "";
 		for (int i = 0; i < messages.size(); i++) {
@@ -96,8 +96,10 @@ public class SpreadsheetImportImportFormController {
 			messageString += messages.get(i);
 		}
 		if (succeeded) {
-			messageString += "Success!";
-			try {	    	
+			messageString += "<br />";
+			messageString += "<br />";
+			messageString += "Successfully processed the file!";
+			/*try {
 			      InputStream is = new FileInputStream(returnedFile);
 			      response.setContentType("application/ms-excel");
 			      response.addHeader("content-disposition", "inline;filename=" + returnedFile.getName());
@@ -105,12 +107,14 @@ public class SpreadsheetImportImportFormController {
 			      response.flushBuffer();
 			    } catch (IOException ex) {
 			      log.info("Error writing file to output stream");
-			    }
+			    }*/
 		}
 				
 		if (!messageString.isEmpty()) {
 			if (succeeded) {
 				request.getSession().setAttribute(WebConstants.OPENMRS_MSG_ATTR, messageString);
+				return "/module/spreadsheetimport/spreadsheetimportResponseList";
+
 			} else {	
 				request.getSession().setAttribute(WebConstants.OPENMRS_ERROR_ATTR, "Error processing request, " + messageString);
 			}

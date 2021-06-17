@@ -241,7 +241,7 @@ public class SpreadsheetImportUtil {
 		return result;
 	}
 	
-	public static File importTemplate(SpreadsheetImportTemplate template, MultipartFile file, String sheetName,
+	public static String importTemplate(SpreadsheetImportTemplate template, MultipartFile file, String sheetName,
 	                                     List<String> messages, boolean rollbackTransaction) throws Exception {
 
 		if (file.isEmpty()) {
@@ -310,12 +310,12 @@ public class SpreadsheetImportUtil {
 
 		
 		// write back Excel file to a temp location
-		File returnFile = File.createTempFile("sim", ".xls");
+		/*File returnFile = File.createTempFile("sim", ".xls");
 		FileOutputStream fos = new FileOutputStream(returnFile);
 		//wb.write(fos);
-		fos.close();
+		fos.close();*/
 		
-		return returnFile;
+		return "File processed successfully";
 	}
 
 	public static Patient checkIfPatientExists(String identifier) {
@@ -490,7 +490,8 @@ public class SpreadsheetImportUtil {
 	 */
 	public static void importViralLoadResults(Sheet sheet) {
 
-		String dateFormat = "d-MMM-yy";// As provided in the results excel document
+		//String dateFormat = "d-MMM-yy";// As provided in the results excel document
+		String dateFormat = "dd-MMM-yy";// As provided in the results excel document
 
 		boolean start = true;
 		int counter = 0;
@@ -505,9 +506,13 @@ public class SpreadsheetImportUtil {
 			}
 
 			// define indexes for the columns. element at position 0 is the entry id
-			int colUniquePatientNumber = 1;
+/*			int colUniquePatientNumber = 1;
 			int colDateVlOrdered = 6;
-			int colVlResult = 7;
+			int colVlResult = 7;*/
+
+			int colUniquePatientNumber = 4;
+			int colDateVlOrdered = 21;
+			int colVlResult = 31;
 
 			DataFormatter formatter = new DataFormatter();
 			String uniquePatientNumber = formatter.formatCellValue(row.getCell(colUniquePatientNumber));
@@ -583,15 +588,22 @@ public class SpreadsheetImportUtil {
 				}
 
 				Concept conceptToRetain = null;
-				String lDLResult = "0.01";
+				//String lDLResult = "0.01";
+				String lDLResult = "< LDL copies/ml";
+				String aboveTenMillion = "> 10,000,000 cp/ml";
 				Obs o = new Obs();
 
-				if (result.equals(lDLResult)) {
+				if (result.equalsIgnoreCase(lDLResult)) {
 					conceptToRetain = vlTestConceptQualitative;
 					o.setValueCoded(LDLConcept);
 				} else {
-					conceptToRetain = vlTestConceptQuantitative;
-					o.setValueNumeric(Double.valueOf(result));
+					if (result.equalsIgnoreCase(aboveTenMillion)) {
+						conceptToRetain = vlTestConceptQuantitative;
+						o.setValueNumeric(Double.valueOf("10000000"));
+					} else {
+						conceptToRetain = vlTestConceptQuantitative;
+						o.setValueNumeric(Double.valueOf(result));
+					}
 				}
 
 				// In order to record results both qualitative (LDL) and quantitative,
