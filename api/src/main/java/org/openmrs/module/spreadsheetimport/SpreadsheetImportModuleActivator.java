@@ -15,24 +15,24 @@ package org.openmrs.module.spreadsheetimport;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.openmrs.module.Activator;
+import org.openmrs.module.BaseModuleActivator;
 
 /**
  * This class contains the logic that is run every time this module is either started or shutdown
  */
-public class SpreadsheetImportModuleActivator implements Activator {
+public class SpreadsheetImportModuleActivator extends BaseModuleActivator {
 	
 	private Log log = LogFactory.getLog(this.getClass());
 	
 	/**
-	 * @see org.openmrs.module.Activator#startup()
+	 * @see #startup()
 	 */
 	public void startup() {
 		log.info("Starting Spreadsheet Import Module");
 	}
 	
 	/**
-	 * @see org.openmrs.module.Activator#shutdown()
+	 * @see #shutdown()
 	 */
 	public void shutdown() {
 		log.info("Shutting down Spreadsheet Import Module");
