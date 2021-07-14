@@ -52,7 +52,7 @@ import org.springframework.web.bind.annotation.SessionAttributes;
  * This controller backs and saves the Spreadsheet Import module settings
  */
 @Controller
-@RequestMapping("/module/spreadsheetimport/spreadsheetimport.form")
+//@RequestMapping("/module/spreadsheetimport/spreadsheetimport")
 @SessionAttributes({"template", "dataforms"})
 public class SpreadsheetImportFormController {
 	
@@ -67,7 +67,7 @@ public class SpreadsheetImportFormController {
 	}
 	
 //	@RequestMapping(method = RequestMethod.GET)
-	@RequestMapping(value = {"/module/spreadsheetimport/spreadsheetimport.form"}, method = RequestMethod.GET)
+	@RequestMapping(value = {"/module/spreadsheetimport/spreadsheetimport"}, method = RequestMethod.GET)
 	public String setupForm(@RequestParam(value = "id", required = false) Integer id, ModelMap model,
 	                        HttpServletRequest request) {
 		SpreadsheetImportTemplate template = null;
@@ -86,7 +86,7 @@ public class SpreadsheetImportFormController {
 		return "/module/spreadsheetimport/spreadsheetimportFormColumn";
 	}
 	
-	@RequestMapping(value = {"/module/spreadsheetimport/spreadsheetimport.form"}, method = RequestMethod.POST)
+	@RequestMapping(value = {"/module/spreadsheetimport/spreadsheetimport"}, method = RequestMethod.POST)
 	public String processSubmit(@ModelAttribute("template") SpreadsheetImportTemplate template, BindingResult result,
 	                            HttpServletRequest request) throws Exception {
 

@@ -12,9 +12,9 @@
   Copyright (C) OpenMRS, LLC.  All Rights Reserved.
 
 --%>
-<%@ include file="/WEB-INF/template/include.jsp" %>
+<%@ include file="/WEB-INF/view/module/legacyui/template/include.jsp" %>
 <openmrs:require privilege="List Spreadsheet Import Templates" otherwise="/login.htm" redirect="/module/spreadsheetimport/spreadsheetimport.list"/>
-<%@ include file="/WEB-INF/template/header.jsp" %>
+<%@ include file="/WEB-INF/view/module/legacyui/template/header.jsp" %>
 <%@ include file="localHeader.jsp" %>
 
 <h2>Spreadsheet Import Template</h2>
@@ -25,4 +25,4 @@
 	The file was processed successfully
 </div>
 
-<%@ include file="/WEB-INF/template/footer.jsp" %>
+<%@ include file="/WEB-INF/view/module/legacyui/template/footer.jsp" %>
