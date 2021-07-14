@@ -14,21 +14,14 @@
 	<description>API project for Spreadsheet Import Module</description>
 
 	<dependencies>
-		<!-- 
-		Add other dependencies from lib:
-		<dependency>
-			<groupId>org.other.library</groupId>
-			<artifactId>library-name</artifactId>
-		</dependency>
-		-->
 		<dependency>
 			<groupId>org.openmrs.module</groupId>
 			<artifactId>idgen-api</artifactId>
 		</dependency>
-		<dependency>
+		<!--<dependency>
 			<groupId>org.openmrs.module</groupId>
 			<artifactId>hivtestingservices-api</artifactId>
-		</dependency>
+		</dependency>-->
 		<!-- Begin OpenMRS core -->
 
 		<dependency>
