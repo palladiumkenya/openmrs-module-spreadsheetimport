@@ -157,14 +157,14 @@
     "template_id": 47,
     "dataset": "tr_hei_outcome",
     "obsGroupConfig":""
-  }
+  },
 
   {
     "description": "Processes HEI Followup",
     "template_id": 49,
     "dataset": "tr_hei_followup",
     "obsGroupConfig":""
-  }
+  },
     {
     "description": "Processes HEI enrolment",
     "template_id": 50,
