@@ -13,19 +13,14 @@
  */
 package org.openmrs.module.spreadsheetimport.db.hibernate.impl;
 
-import java.util.List;
-
 import org.hibernate.Criteria;
-import org.hibernate.HibernateException;
 import org.hibernate.SessionFactory;
-import org.hibernate.criterion.CriteriaQuery;
 import org.hibernate.criterion.Order;
-import org.hibernate.engine.TypedValue;
 import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplate;
-import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplateColumn;
-import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplateColumnPrespecifiedValue;
 import org.openmrs.module.spreadsheetimport.SpreadsheetImportTemplatePrespecifiedValue;
 import org.openmrs.module.spreadsheetimport.db.hibernate.SpreadsheetImportDAO;
+
+import java.util.List;
 
 public class SpreadsheetImportDAOImpl implements SpreadsheetImportDAO {
 	

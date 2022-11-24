@@ -26,6 +26,10 @@
 			<groupId>org.openmrs.module</groupId>
 			<artifactId>idgen-api</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.openmrs.module</groupId>
+			<artifactId>legacyui-omod</artifactId>
+		</dependency>
 		<!-- Begin OpenMRS core -->
 
 		<dependency>

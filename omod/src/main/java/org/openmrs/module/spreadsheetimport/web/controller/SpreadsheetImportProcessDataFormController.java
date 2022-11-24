@@ -24,10 +24,10 @@ import javax.servlet.http.HttpServletRequest;
  * This controller handles processing of db datasets
  */
 @Controller
-@RequestMapping("/module/spreadsheetimport/spreadsheetimportprocessdatasets.form")
+@RequestMapping("/module/spreadsheetimport/spreadsheetimportprocessdatasets")
 public class SpreadsheetImportProcessDataFormController {
 
-    @RequestMapping(value = "/module/spreadsheetimport/spreadsheetimportprocessdatasets.form", method = RequestMethod.GET)
+    @RequestMapping(value = "/module/spreadsheetimport/spreadsheetimportprocessdatasets", method = RequestMethod.GET)
     public String setupForm(ModelMap model,
                             final HttpServletRequest request) {
         return "/module/spreadsheetimport/spreadsheetimportProcessDataForm";

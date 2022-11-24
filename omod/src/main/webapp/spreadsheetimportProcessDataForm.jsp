@@ -12,7 +12,7 @@
   Copyright (C) OpenMRS, LLC.  All Rights Reserved.
 
 --%>
-<%@ include file="/WEB-INF/template/include.jsp" %>
+
 <openmrs:require privilege="Import Spreadsheet Import Templates" otherwise="/login.htm" redirect="/module/spreadsheetimport/spreadsheetimportImport.form"/>
 <%@ include file="/WEB-INF/template/header.jsp" %>
 <%@ include file="localHeader.jsp" %>

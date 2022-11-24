@@ -60,7 +60,7 @@ public class SpreadsheetImportImportFormController {
 	 */
 	protected final Log log = LogFactory.getLog(getClass());
 	
-	@RequestMapping(value = "/module/spreadsheetimport/spreadsheetimportImport.form", method = RequestMethod.GET)
+	@RequestMapping(value = "/module/spreadsheetimport/spreadsheetimportImport", method = RequestMethod.GET)
 	public String setupForm(@RequestParam(value = "id", required = true) Integer id, 
 							ModelMap model,
 	                        final HttpServletRequest request) {
@@ -70,7 +70,7 @@ public class SpreadsheetImportImportFormController {
 		return "/module/spreadsheetimport/spreadsheetimportImportForm";
 	}
 	
-	@RequestMapping(value = "/module/spreadsheetimport/spreadsheetimportImport.form", method = RequestMethod.POST)
+	@RequestMapping(value = "/module/spreadsheetimport/spreadsheetimportImport", method = RequestMethod.POST)
 	public String processSubmit(@ModelAttribute("template") SpreadsheetImportTemplate template, 
 								ModelMap model, 
 	                            @RequestParam(value = "file", required = true) MultipartFile file,

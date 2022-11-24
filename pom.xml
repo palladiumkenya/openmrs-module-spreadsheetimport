@@ -37,6 +37,19 @@ lib/poi-ooxml-3.6-20091214.jar
 				<scope>compile</scope>
 			</dependency>
 			-->
+
+			<dependency>
+				<groupId>org.openmrs.module</groupId>
+				<artifactId>legacyui-api</artifactId>
+				<version>${legacyUiVersion}</version>
+				<scope>provided</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.openmrs.module</groupId>
+				<artifactId>legacyui-omod</artifactId>
+				<version>${legacyUiVersion}</version>
+				<scope>provided</scope>
+			</dependency>
 			<dependency>
 				<groupId>org.openmrs.module</groupId>
 				<artifactId>idgen-api</artifactId>
@@ -110,10 +123,12 @@ lib/poi-ooxml-3.6-20091214.jar
 	</dependencyManagement>
 
 	<properties>
-		<openMRSVersion>1.12.1</openMRSVersion>
+		<openMRSVersion>2.3.3</openMRSVersion>
+		<openMRSMinorVersion>2.0</openMRSMinorVersion>
 		<poiVersion>3.15</poiVersion>
 		<apacheValidatorVersion>1.6</apacheValidatorVersion>
 		<idgenVersion>2.6</idgenVersion>
+		<legacyUiVersion>1.5.0</legacyUiVersion>
 	</properties>
 
 	<build>
@@ -123,14 +138,19 @@ lib/poi-ooxml-3.6-20091214.jar
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
 					<configuration>
-						<target>1.5</target>
-						<source>1.5</source>
+						<target>1.6</target>
+						<source>1.6</source>
 					</configuration>
 				</plugin>
 				<plugin>
 					<groupId>org.openmrs.maven.plugins</groupId>
 					<artifactId>maven-openmrs-plugin</artifactId>
 					<version>1.0.1</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-dependency-plugin</artifactId>
+					<version>2.4</version>
 				</plugin>
 			</plugins>
 		</pluginManagement>

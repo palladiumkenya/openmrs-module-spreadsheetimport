@@ -1900,14 +1900,15 @@ public class DbImportUtil {
                             u.addRole(rRole);
                             u.addRole(iRole);
                             u.addRole(dRole);
+
                         }
 
                         User createdUser = null;
-                        try {
+                        /*try {
                             createdUser = us.saveUser(u, generatedPassword);
                         } catch (Exception e) {
                             System.out.print("Error processing row with user_id=" + userId + ", cause: " + e.getCause());
-                        }
+                        }*/
                         // update user details
                         if (createdUser != null) {
                             Integer generatedUserId = createdUser.getUserId();
@@ -2448,15 +2449,15 @@ public class DbImportUtil {
 
     public static Location getDefaultLocation() {
         try {
-            Context.addProxyPrivilege(PrivilegeConstants.VIEW_LOCATIONS);
-            Context.addProxyPrivilege(PrivilegeConstants.VIEW_GLOBAL_PROPERTIES);
+            Context.addProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
+            Context.addProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
             String GP_DEFAULT_LOCATION = "kenyaemr.defaultLocation";
             GlobalProperty gp = Context.getAdministrationService().getGlobalPropertyObject(GP_DEFAULT_LOCATION);
             return gp != null ? ((Location) gp.getValue()) : null;
         }
         finally {
-            Context.removeProxyPrivilege(PrivilegeConstants.VIEW_LOCATIONS);
-            Context.removeProxyPrivilege(PrivilegeConstants.VIEW_GLOBAL_PROPERTIES);
+            Context.removeProxyPrivilege(PrivilegeConstants.GET_LOCATIONS);
+            Context.removeProxyPrivilege(PrivilegeConstants.GET_GLOBAL_PROPERTIES);
         }
 
     }

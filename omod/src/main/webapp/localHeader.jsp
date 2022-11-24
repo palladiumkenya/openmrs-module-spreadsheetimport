@@ -15,7 +15,7 @@
 		</a>
 	</li>
 	<li <c:if test='<%= request.getRequestURI().contains("spreadsheetimportprocessdatasets") %>'>class="active"</c:if>>
-		<a href="spreadsheetimportprocessdatasets.form">
+		<a href="spreadsheetimportprocessdatasets">
 			Import Data to KenyaEMR
 		</a>
 	</li>

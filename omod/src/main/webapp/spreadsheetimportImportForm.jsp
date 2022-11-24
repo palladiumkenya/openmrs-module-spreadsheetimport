@@ -12,24 +12,24 @@
   Copyright (C) OpenMRS, LLC.  All Rights Reserved.
 
 --%>
-<%@ include file="/WEB-INF/template/include.jsp" %>
+<%@ include file="/WEB-INF/view/module/legacyui/template/include.jsp" %>
 <openmrs:require privilege="Import Spreadsheet Import Templates" otherwise="/login.htm" redirect="/module/spreadsheetimport/spreadsheetimportImport.form"/>
-<%@ include file="/WEB-INF/template/header.jsp" %>
+<%@ include file="/WEB-INF/view/module/legacyui/template/header.jsp" %>
 <%@ include file="localHeader.jsp" %>
 <%@ page session="true" %>
 <%@ page pageEncoding="UTF-8" %>
 <%@ page contentType="text/html; charset=UTF-8" %>
 
 <form method="post" enctype="multipart/form-data">
-    <form:errors path="*" cssClass="error"/>
+	<form:errors path="*" cssClass="error"/>
 	<input type="hidden" name="id" value="${template.id}"/> <br/>
 	<b>${template.name}</b><br />
 	Spreadsheet to upload: <input type="file" name="file" /> <br/>
 	Sheet: <input type="text" name="sheet" value="Sheet1"/> <br/>
-<!-- BEGIN: FOR TESTING ONLY -->
+	<!-- BEGIN: FOR TESTING ONLY -->
 	<input type="checkbox" name="rollbackTransaction"/> Rollback transaction <br/>
-<!-- END: FOR TESTING ONLY -->
+	<!-- END: FOR TESTING ONLY -->
 	<input type="submit" value="Upload"/>
 </form>
 
-<%@ include file="/WEB-INF/template/footer.jsp"%>
+<%@ include file="/WEB-INF/view/module/legacyui/template/footer.jsp"%>
