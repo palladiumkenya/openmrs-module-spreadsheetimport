@@ -51,7 +51,7 @@ import org.springframework.web.multipart.MultipartFile;
  * This controller backs and saves the Spreadsheet Import module settings
  */
 @Controller
-@RequestMapping("/module/spreadsheetimport/spreadsheetimportImport.form")
+/*@RequestMapping("/module/spreadsheetimport/spreadsheetimportImport.form")*/
 @SessionAttributes({"template", "spreadsheetFile"})
 public class SpreadsheetImportImportFormController {
 	
