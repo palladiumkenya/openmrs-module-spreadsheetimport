@@ -12,9 +12,9 @@
   Copyright (C) OpenMRS, LLC.  All Rights Reserved.
 
 --%>
-
+<%@ include file="/WEB-INF/view/module/legacyui/template/include.jsp" %>
 <openmrs:require privilege="Import Spreadsheet Import Templates" otherwise="/login.htm" redirect="/module/spreadsheetimport/spreadsheetimportImport.form"/>
-<%@ include file="/WEB-INF/template/header.jsp" %>
+<%@ include file="/WEB-INF/view/module/legacyui/template/header.jsp" %>
 <%@ include file="localHeader.jsp" %>
 <%@ page session="true" %>
 <%@ page pageEncoding="UTF-8" %>
@@ -151,4 +151,4 @@
 
 
 
-<%@ include file="/WEB-INF/template/footer.jsp"%>
+<%@ include file="/WEB-INF/view/module/legacyui/template/footer.jsp"%>

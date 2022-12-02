@@ -53,7 +53,7 @@ import org.springframework.web.bind.annotation.SessionAttributes;
  * This controller backs and saves the Spreadsheet Import module settings
  */
 @Controller
-@RequestMapping("/module/spreadsheetimport/spreadsheetimport.form")
+/*@RequestMapping("/module/spreadsheetimport/spreadsheetimport.form")*/
 @SessionAttributes({"template", "dataforms"})
 public class SpreadsheetImportFormController {
 	
