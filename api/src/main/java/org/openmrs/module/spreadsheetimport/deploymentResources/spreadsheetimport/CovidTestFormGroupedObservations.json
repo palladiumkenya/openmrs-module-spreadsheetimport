@@ -1,0 +1,62 @@
+[
+  {
+    "description": "Mapping for COVID test form variables",
+    "groupingConcept": 165852,
+    "dataset": "",
+    "datasetColumns": [
+      {
+        "name": "ag_rdt_test_date",
+        "questionConcept": 162078,
+        "dataType": "date"
+      },
+      {
+        "name": "case_type",
+        "questionConcept": 162084,
+        "dataType": "value_coded"
+      },
+      {
+        "name": "assay_kit_name",
+        "questionConcept": 164963,
+        "dataType": "value_text"
+      },
+      {
+        "name": "ag_rdt_test_type_coded",
+        "questionConcept": 1271,
+        "dataType": "value_coded"
+      },
+      {
+        "name": "ag_rdt_test_type_other",
+        "questionConcept": 165398,
+        "dataType": "value_text"
+      },
+      {
+        "name": "kit_lot_number",
+        "questionConcept": 166455,
+        "dataType": "value_text"
+      },
+      {
+        "name": "kit_expiry",
+        "questionConcept": 162502,
+        "dataType": "value_datetime"
+      },
+      {
+        "name": "test_result",
+        "questionConcept": 166638,
+        "dataType": "value_coded"
+      },
+      {
+        "name": "action_taken",
+        "questionConcept": 1272,
+        "dataType": "value_coded"
+      }
+    ]
+  }
+]
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 

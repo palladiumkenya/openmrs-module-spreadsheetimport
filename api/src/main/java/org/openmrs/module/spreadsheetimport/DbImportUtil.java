@@ -314,7 +314,7 @@ public class DbImportUtil {
         columnNamesOnlyInTemplate.addAll(template.getColumnNamesAsList());
         columnNamesOnlyInTemplate.removeAll(columnNames);
         if (columnNamesOnlyInTemplate.isEmpty() == false) {
-            messages.add("required column names not present: " + toString(columnNamesOnlyInTemplate));
+            messages.add("required column names not present: " + toString(columnNamesOnlyInTemplate) + " in template " + template.getName());
             return null;
         }
 
@@ -675,7 +675,7 @@ public class DbImportUtil {
         String UNIQUE_PATIENT_NUMBER = "05ee9cf4-7242-4a17-b4d4-00f707265c8a";
         String IQCARE_PERSON_PK = "b3d6de9f-f215-4259-9805-8638c887e46b"; // this should be retired once migration is complete
 
-        List<String> identifierTypeList = Arrays.asList(UNIQUE_PATIENT_NUMBER, NATIONAL_ID, IQCARE_PERSON_PK);
+        List<String> identifierTypeList = Arrays.asList(UNIQUE_PATIENT_NUMBER, NATIONAL_ID);
 
 
         String COL_IQCARE_PERSON_PK = "Person_Id";
@@ -787,7 +787,7 @@ public class DbImportUtil {
 
             s = conn.createStatement();
 
-            String query = "select * from :migrationDatabase.tr_demographics";
+            String query = "select * from :migrationDatabase.tr_demographics where patient_id is null";
             query = query.replace(":migrationDatabase", migrationDatabase);
 
             ResultSet rs = s.executeQuery(query);
@@ -822,6 +822,7 @@ public class DbImportUtil {
                 String upn = null;
                 String nationalId = null;
                 String iqCarePersonId = null;
+                Integer migrationPersonId = null;
 
                 String phoneContact = null;
                 String alternativePhoneContact = null;
@@ -872,6 +873,7 @@ public class DbImportUtil {
 
 
                 iqCarePersonId = rs.getString(COL_IQCARE_PERSON_PK);
+                migrationPersonId = rs.getInt(COL_IQCARE_PERSON_PK); // working with Person_Id for this
                 upn = rs.getString(COL_UPN);
                 nationalId = rs.getString(COL_NATIONAL_ID);
 
@@ -936,7 +938,8 @@ public class DbImportUtil {
                         "(date_created, uuid, creator, person_id, county_district, state_province, address4, city_village, address2, address1)  " +
                         " values(now(),uuid(), ?, ?, ?, ?, ?, ?, ?, ?);";
 
-                PreparedStatement insertPersonAddress = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+                //TODO: pull address
+                /*PreparedStatement insertPersonAddress = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
                 insertPersonAddress.setInt(1, Context.getAuthenticatedUser().getId()); // set creator
                 insertPersonAddress.setInt(2, patientId.intValue()); // set person id
                 insertPersonAddress.setString(3, county);
@@ -949,7 +952,7 @@ public class DbImportUtil {
                 insertPersonAddress.executeUpdate();
                 ResultSet returnedPersonAddress = insertPersonAddress.getGeneratedKeys();
                 returnedPersonAddress.next();
-                returnedPersonAddress.close();
+                returnedPersonAddress.close();*/
 
                 // insert into patient table
 
@@ -1066,6 +1069,16 @@ public class DbImportUtil {
                 ResultSet returnedId = insertPreferredIdentifierStatement.getGeneratedKeys();
                 returnedId.next();
                 returnedId.close();
+
+                // insert into patient table
+
+                sql = "update migration_tr.tr_demographics set patient_id = " + patientId.intValue() + " where Person_Id = " + migrationPersonId ;
+                Statement updatePatientId = conn.createStatement();
+                updatePatientId.executeUpdate(sql, Statement.RETURN_GENERATED_KEYS);
+                ResultSet returnedPatientDetails = updatePatientId.getGeneratedKeys();
+                returnedPatientDetails.next();
+                returnedPatientDetails.close();
+
                 recordCount++;
                 DbImportUtil.updateMigrationProgressMapProperty("Demographics", "processedCount", String.valueOf(recordCount));
 
@@ -2261,18 +2274,18 @@ public class DbImportUtil {
 
             // process for users
 
-            String usersQuery = "select count(*) as rowCount from :migrationDatabase.:tableName";
+            /*String usersQuery = "select count(*) as rowCount from :migrationDatabase.:tableName";
             usersQuery = usersQuery.replace(":migrationDatabase", migrationDatabase);
             usersQuery = usersQuery.replace(":tableName", usersTableName);
             ResultSet rsUsers = s.executeQuery(usersQuery);
             rsUsers.next();
             DbImportUtil.updateMigrationProgressMapProperty("Users", "totalRowCount", String.valueOf(rsUsers.getInt("rowCount")));
             DbImportUtil.updateMigrationProgressMapProperty("Users", "processedCount", String.valueOf(0));
-            rsUsers.close();
+            rsUsers.close();*/
 
             // process for demographics
 
-            String query = "select count(*) as rowCount from :migrationDatabase.:tableName";
+            String query = "select count(*) as rowCount from :migrationDatabase.:tableName where patient_id is null";
             query = query.replace(":migrationDatabase", migrationDatabase);
             query = query.replace(":tableName", demographicsTableName);
             ResultSet rs = s.executeQuery(query);
@@ -2296,6 +2309,7 @@ public class DbImportUtil {
                 countRs.close();
             }
 
+  /*
             String labQuery = "select count(*) as rowCount from :migrationDatabase.tr_vital_labs";
             labQuery = labQuery.replace(":migrationDatabase", migrationDatabase);
             ResultSet rsLabs = s.executeQuery(labQuery);
@@ -2324,6 +2338,8 @@ public class DbImportUtil {
             DbImportUtil.updateMigrationProgressMapProperty("Patient Contacts", "totalRowCount", String.valueOf(rsHtsContacts.getInt("rowCount")));
             DbImportUtil.updateMigrationProgressMapProperty("Patient Contacts", "processedCount", String.valueOf(0));
             rsHtsContacts.close();
+
+
 
             /*String immunizationQuery = "select count(*) as rowCount from :migrationDatabase.:tableName";
             immunizationQuery = immunizationQuery.replace(":migrationDatabase", migrationDatabase);

@@ -1,0 +1,57 @@
+[
+  {
+    "description": "Mapping for COVID review form variables",
+    "groupingConcept": 165611,
+    "dataset": "",
+    "datasetColumns": [
+      {
+        "name": "case_id",
+        "questionConcept": 162576,
+        "dataType": "value_text"
+      },
+      {
+        "name": "email",
+        "questionConcept": 162725,
+        "dataType": "value_text"
+      },
+      {
+        "name": "case_type",
+        "questionConcept": 162084,
+        "dataType": "value_coded"
+      },
+      {
+        "name": "pcr_sample_collection_date",
+        "questionConcept": 162078,
+        "dataType": "value_datetime"
+      },
+      {
+        "name": "pcr_result_date",
+        "questionConcept": 162079,
+        "dataType": "value_datetime"
+      },
+      {
+        "name": "pcr_result",
+        "questionConcept": 166638,
+        "dataType": "value_coded"
+      },
+      {
+        "name": "case_classification_after_positive_pcr",
+        "questionConcept": 159640,
+        "dataType": "value_coded"
+      },
+      {
+        "name": "action_taken_after_pcr_result",
+        "questionConcept": 160721,
+        "dataType": "value_coded"
+      }
+    ]
+  }
+]
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 

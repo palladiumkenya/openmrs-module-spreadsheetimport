@@ -46,15 +46,15 @@ public class DWRMigrationService {
 		String successfulProcessMsg = "";
 		String migrationDatabase = Context.getAdministrationService().getGlobalProperty(GP_MIGRATION_DATABASE);
 		DbImportUtil.setRowCountForDatasets(migrationDatabase);
-		DbImportUtil.processUsers(messages, migrationDatabase);
+		//DbImportUtil.processUsers(messages, migrationDatabase);
 		Context.flushSession();
 		successfulProcessMsg = DbImportUtil.processDemographicsDataset(messages, migrationDatabase);
 		doPostDemographics();
 		processOtherDatasets(migrationDatabase);
 
-		DbImportUtil.processViralLoadAndCD4Labs(messages, migrationDatabase);
+		/*DbImportUtil.processViralLoadAndCD4Labs(messages, migrationDatabase);
 		DbImportUtil.processPatientRelationships(messages, migrationDatabase);
-		DbImportUtil.processPatientContactLists(messages, migrationDatabase);
+		DbImportUtil.processPatientContactLists(messages, migrationDatabase);*/
 		//DbImportUtil.processHeiImmunizations(messages, migrationDatabase);
 		DbImportUtil.updateEncounterLocation(messages, migrationDatabase);
 

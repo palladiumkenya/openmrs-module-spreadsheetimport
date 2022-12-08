@@ -1,0 +1,20 @@
+[
+   {
+    "description": "Migrates CCA screening data",
+    "template_id": 1,
+    "dataset": "migration_etl_cca_covid_screening",
+    "obsGroupConfig":""
+  },
+  {
+    "description": "Migrates CCA Testing data",
+    "template_id": 2,
+    "dataset": "migration_etl_cca_covid_rdt_test",
+    "obsGroupConfig":"CovidTestFormGroupedObservations.json"
+  },
+  {
+    "description": "Migrates CCA Clinical Review data",
+    "template_id": 3,
+    "dataset": "migration_etl_cca_covid_clinical_review",
+    "obsGroupConfig":"CovidReviewFormGroupedObservations.json"
+  }
+]
