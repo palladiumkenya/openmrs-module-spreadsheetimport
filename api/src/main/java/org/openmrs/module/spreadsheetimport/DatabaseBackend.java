@@ -813,13 +813,14 @@ public class DatabaseBackend {
                 sql = sql.replace("'NULL'", "NULL");
                 //replace empty space with ',NULL,'
                 sql = sql.replace(",,", ",NULL,");
+                sql = sql.replace("(,", "(NULL,");
 
                 if (log.isDebugEnabled()) {
                     log.debug(sql);
                 }
 
                 //introduce batch processing for encounter obs
-
+                //System.out.println("SQL: " + sql);
                 if (isObservation) {
                     s.addBatch(sql);
                 } else {
