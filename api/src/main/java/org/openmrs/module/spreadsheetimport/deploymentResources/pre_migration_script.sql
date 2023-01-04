@@ -8,6 +8,7 @@ update spreadsheetimport_template set target_form = (select form_id from form wh
 update spreadsheetimport_template set target_form = (select form_id from form where uuid='9a5d57b6-739a-11ea-bc55-0242ac130003') where id = 4; -- enrolment
 update spreadsheetimport_template set target_form = (select form_id from form where uuid='9a5d58c4-739a-11ea-bc55-0242ac130003') where id = 5; -- outcome
 update spreadsheetimport_template set target_form = (select form_id from form where uuid='33a3aab6-73ae-11ea-bc55-0242ac130003') where id = 6; -- followup
+update spreadsheetimport_template set target_form = (select form_id from form where uuid='33a3aab6-73ae-11ea-bc55-0242ac130003') where id = 8; -- followup
 
 
 update spreadsheetimport_template_prespecified_value set value = (select form_id from form where uuid='117092aa-5355-11ec-bf63-0242ac130002') where template_id = 1 and database_table_dot_column = 'form.form_id';
@@ -16,6 +17,7 @@ update spreadsheetimport_template_prespecified_value set value = (select form_id
 update spreadsheetimport_template_prespecified_value set value = (select form_id from form where uuid='9a5d57b6-739a-11ea-bc55-0242ac130003') where template_id = 4 and database_table_dot_column = 'form.form_id';
 update spreadsheetimport_template_prespecified_value set value = (select form_id from form where uuid='9a5d58c4-739a-11ea-bc55-0242ac130003') where template_id = 5 and database_table_dot_column = 'form.form_id';
 update spreadsheetimport_template_prespecified_value set value = (select form_id from form where uuid='33a3aab6-73ae-11ea-bc55-0242ac130003') where template_id = 6 and database_table_dot_column = 'form.form_id';
+update spreadsheetimport_template_prespecified_value set value = (select form_id from form where uuid='33a3aab6-73ae-11ea-bc55-0242ac130003') where template_id = 8 and database_table_dot_column = 'form.form_id';
 
 
 update spreadsheetimport_template_prespecified_value set value = (select encounter_type_id from encounter_type where uuid='11708f6c-5355-11ec-bf63-0242ac130002') where template_id = 1 and database_table_dot_column = 'encounter_type.encounter_type_id';
@@ -24,6 +26,7 @@ update spreadsheetimport_template_prespecified_value set value = (select encount
 update spreadsheetimport_template_prespecified_value set value = (select encounter_type_id from encounter_type where uuid='33a3a55c-73ae-11ea-bc55-0242ac130003') where template_id = 4 and database_table_dot_column = 'encounter_type.encounter_type_id';
 update spreadsheetimport_template_prespecified_value set value = (select encounter_type_id from encounter_type where uuid='33a3a7be-73ae-11ea-bc55-0242ac130003') where template_id = 5 and database_table_dot_column = 'encounter_type.encounter_type_id';
 update spreadsheetimport_template_prespecified_value set value = (select encounter_type_id from encounter_type where uuid='33a3a8e0-73ae-11ea-bc55-0242ac130003') where template_id = 6 and database_table_dot_column = 'encounter_type.encounter_type_id';
+update spreadsheetimport_template_prespecified_value set value = (select encounter_type_id from encounter_type where uuid='33a3a8e0-73ae-11ea-bc55-0242ac130003') where template_id = 8 and database_table_dot_column = 'encounter_type.encounter_type_id';
 
 update spreadsheetimport_template_prespecified_value set value = (select program_id from program where uuid='117093ea-5355-11ec-bf63-0242ac130002') where template_id = 7 and database_table_dot_column = 'program.program_id';
 

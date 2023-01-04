@@ -1,5 +1,5 @@
 [
-   {
+  {
     "description": "Migrates CCA screening data",
     "template_id": 1,
     "dataset": "migration_etl_cca_covid_screening",
@@ -16,5 +16,29 @@
     "template_id": 3,
     "dataset": "migration_etl_cca_covid_clinical_review",
     "obsGroupConfig":"CovidReviewFormGroupedObservations.json"
+  },
+  {
+    "description": "Migrates CCA COVID treatment Enrollment form data",
+    "template_id": 4,
+    "dataset": "migration_etl_cca_covid_treatment_enrollment",
+    "obsGroupConfig":""
+  },
+  {
+    "description": "Migrates CCA COVID treatment outcome form data",
+    "template_id": 5,
+    "dataset": "migration_etl_cca_covid_treatment_enrollment_outcome",
+    "obsGroupConfig":""
+  },
+  {
+    "description": "Migrates CCA COVID treatment followup data",
+    "template_id": 8,
+    "dataset": "migration_etl_cca_covid_treatment_followup",
+    "obsGroupConfig":""
+  },
+  {
+    "description": "Migrates CCA COVID patient program data",
+    "template_id": 7,
+    "dataset": "migration_cca_covid_program",
+    "obsGroupConfig":""
   }
 ]

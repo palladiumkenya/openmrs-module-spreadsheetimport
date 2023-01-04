@@ -684,6 +684,7 @@ public class DbImportUtil {
         String COL_LAST_NAME = "Last_Name";
         String COL_SEX = "Sex";
         String COL_DOB = "DOB";
+        String COL_DOB_ESTIMATED = "Exact_DOB";
         String COL_COUNTY = "County";
         String COL_SUB_COUNTY = "Sub_county";
         String COL_WARD = "Ward";
@@ -808,6 +809,7 @@ public class DbImportUtil {
                 String mName = null;
                 String lName = null;
                 Date dob = null;
+                Integer dobEstimated = null;
                 String dead = null;
                 Date deathDate = null;
 
@@ -841,6 +843,7 @@ public class DbImportUtil {
                 mName = rs.getString(COL_MIDDLE_NAME);
                 lName = rs.getString(COL_LAST_NAME);
                 dob = rs.getDate(COL_DOB);
+                dobEstimated = rs.getInt(COL_DOB_ESTIMATED);
                 sex = rs.getString(COL_SEX);
                 if (StringUtils.isBlank(sex)) {
                     sex = "U";
@@ -890,23 +893,24 @@ public class DbImportUtil {
                 //extract person attributes
 
                 // insert person query
-                sql = "insert into person (date_created, uuid, creator, gender, birthdate) " +
-                        "values (now(), uuid(), ?, ?, ?);";
+                sql = "insert into person (date_created, uuid, creator, gender, birthdate,birthdate_estimated) " +
+                        "values (now(), uuid(), ?, ?, ?, ?);";
 
                 if (StringUtils.isNotBlank(dead) && dead.equalsIgnoreCase("Yes") && deathDate != null) {
-                    sql = "insert into person (date_created, uuid, creator, gender, birthdate, dead, death_date, cause_of_death) " +
-                            "values (now(), uuid(), ?, ?, ?, ?, ?, ?);";
+                    sql = "insert into person (date_created, uuid, creator, gender, birthdate, birthdate_estimated, dead, death_date, cause_of_death) " +
+                            "values (now(), uuid(), ?, ?, ?, ?, ?, ?, ?);";
                 }
 
                 PreparedStatement insertPerson = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
                 insertPerson.setInt(1, Context.getAuthenticatedUser().getId()); // set creator
                 insertPerson.setString(2, sex);
                 insertPerson.setTimestamp(3, (dob != null && !dob.equals("")) ? new java.sql.Timestamp(dob.getTime()) : null);
+                insertPerson.setInt(4, dobEstimated);
 
                 if (StringUtils.isNotBlank(dead) && dead.equalsIgnoreCase("Yes") && deathDate != null) {
-                    insertPerson.setInt(4, 1); // set dead
-                    insertPerson.setTimestamp(5, (deathDate != null && !deathDate.equals("")) ? new java.sql.Timestamp(deathDate.getTime()) : null);
-                    insertPerson.setInt(6, 162574); // set cause of death
+                    insertPerson.setInt(5, 1); // set dead
+                    insertPerson.setTimestamp(6, (deathDate != null && !deathDate.equals("")) ? new java.sql.Timestamp(deathDate.getTime()) : null);
+                    insertPerson.setInt(7, 162574); // set cause of death
                 }
                 insertPerson.executeUpdate();
                 ResultSet returnedPerson = insertPerson.getGeneratedKeys();
@@ -938,8 +942,7 @@ public class DbImportUtil {
                         "(date_created, uuid, creator, person_id, county_district, state_province, address4, city_village, address2, address1)  " +
                         " values(now(),uuid(), ?, ?, ?, ?, ?, ?, ?, ?);";
 
-                //TODO: pull address
-                /*PreparedStatement insertPersonAddress = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+                PreparedStatement insertPersonAddress = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
                 insertPersonAddress.setInt(1, Context.getAuthenticatedUser().getId()); // set creator
                 insertPersonAddress.setInt(2, patientId.intValue()); // set person id
                 insertPersonAddress.setString(3, county);
@@ -952,7 +955,7 @@ public class DbImportUtil {
                 insertPersonAddress.executeUpdate();
                 ResultSet returnedPersonAddress = insertPersonAddress.getGeneratedKeys();
                 returnedPersonAddress.next();
-                returnedPersonAddress.close();*/
+                returnedPersonAddress.close();
 
                 // insert into patient table
 
@@ -2395,9 +2398,9 @@ public class DbImportUtil {
             s = conn.createStatement();
 
             String defaultLocationQuery = "select property_value from global_property where property='kenyaemr.defaultLocation'";
-            String visitUpdateQuery = "update visit set location_id = ? where location_id is not null";
-            String encounterUpdateQuery = "update encounter set location_id = ? where location_id is not null";
-            String obsUpdateQuery = "update obs set location_id = ? where location_id is not null";
+            String visitUpdateQuery = "update visit set location_id = ? ";
+            String encounterUpdateQuery = "update encounter set location_id = ? ";
+            String obsUpdateQuery = "update obs set location_id = ? ";
 
 
             PreparedStatement psUpdateVisit = conn.prepareStatement(visitUpdateQuery, Statement.RETURN_GENERATED_KEYS);

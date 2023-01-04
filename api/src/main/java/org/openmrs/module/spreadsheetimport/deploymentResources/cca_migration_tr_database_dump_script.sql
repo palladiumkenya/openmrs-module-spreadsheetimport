@@ -271,6 +271,14 @@ CREATE TABLE migration_tr.migration_etl_cca_covid_treatment_followup (
                                                                          case_classification INT(11),
                                                                          patient_admitted INT(11),
                                                                          admission_unit INT(11),
+                                                                         treatment_azithromycin INT(11),
+                                                                         treatment_amoxicillin_clavulanic INT(11),
+                                                                         treatment_amoxicillin INT(11),
+                                                                         treatment_tocilizumab INT(11),
+                                                                         treatment_dexamethasone INT(11),
+                                                                         treatment_multivitamin INT(11),
+                                                                         treatment_oxygen INT(11),
+                                                                         treatment_other INT(11),
                                                                          on_ventilation INT(11),
                                                                          vaccinated INT(11),
                                                                          vaccination_status INT(11),
@@ -302,81 +310,11 @@ CREATE TABLE migration_tr.migration_cca_covid_program (
                                                           INDEX(patient_id)
 );
 
-
-
-
-
-
-
-
-
-
-
-
 /*
 	------------ -------------------------------- DML scripts
 */
 -- ------------------------------ demographics -----------------------------
-/*
-insert into migration_tr.tr_demographics(
-    Person_Id,
-    First_Name,
-    Middle_Name,
-    Last_Name,
-    Sex,
-    DOB,
-    Exact_DOB,
-    Encounter_Date,
-    UPN,
-    National_id_no,
-    Patient_clinic_number,
-    Birth_certificate,
-    Passport,
-    Alien_registration,
-    Phone_number
-     Postal_Address        VARCHAR(100),
-    Email_address         VARCHAR(100),
-    County                VARCHAR(100),
-    Sub_county            VARCHAR(100),
-    Ward                  VARCHAR(100),
-    Village               VARCHAR(255),
-    Landmark              VARCHAR(255),
-    Nearest_Health_Centre VARCHAR(255),
-    Next_of_kin           VARCHAR(255),
-    Next_of_kin_phone     VARCHAR(255),
-    Next_of_kin_relationship VARCHAR(255),
-    Next_of_kin_address   VARCHAR(100),
-    Marital_status        VARCHAR(255),
-    Occupation            VARCHAR(255),
-    Education_level       VARCHAR(255),
-    Dead                  VARCHAR(100),
-    Death_date            DATE DEFAULT NULL,
-    Consent               VARCHAR(255),
-    Consent_decline_reason VARCHAR(255),
-    Patient_voided         INT(11),
-    Person_voided          INT(11),
-    CreateDate             DATE,
-    CreatedBy              VARCHAR(100),
-    voided                 INT(11),
-)
-select
-    patient_id,
-    given_name,
-    middle_name,
-    family_name,
-    Gender,
-    DOB,
-    'ESTIMATED',
-    date_created,
-    unique_patient_no,
-    national_id_no,
-    patient_clinic_number,
-    birth_certificate_no,
-    passport_no,
-    alien_no,
-    phone_number
-from kenyaemr_etl.etl_patient_demographics where DOB is not null;
-*/
+
 
 insert into migration_tr.tr_demographics(
     Person_Id,
@@ -397,7 +335,7 @@ select
     p.family_name,
     p.gender,
     p.birthdate,
-    'ESTIMATED',
+    p.birthdate_estimated,
     p.dead,
     p.date_created,
     p.death_date
@@ -409,7 +347,7 @@ FROM (
              pn.family_name,
              p.gender,
              p.birthdate,
-             birthdate_estimated,
+             p.birthdate_estimated,
              p.dead,
              p.date_created,
              p.death_date
@@ -511,6 +449,29 @@ update migration_tr.tr_demographics d
 ;
 
 
+update migration_tr.tr_demographics d
+    left outer join
+    (
+    select
+    person_id,
+    country,
+    county_district as County,
+    state_province as Sub_county,
+    address4 as Ward,
+    city_village as Village,
+    address2 as Landmark,
+    address1 as Postal_Address
+    from migration_st.person_address pa
+    where pa.voided=0
+    group by pa.person_id
+    ) addr on addr.person_id = d.Person_Id
+    set d.County=addr.County,
+        d.Sub_county=addr.Sub_county,
+        d.Ward=addr.Ward,
+        d.Village=addr.Village,
+        d.Landmark=addr.Landmark,
+        d.Postal_Address=addr.Postal_Address
+;
 
 -- ------------------------------- covid screening ----------------------------
 
@@ -575,8 +536,9 @@ select
     max(if(o.concept_id=160388,o.value_coded,null)) as muscular_pain,
     max(if(o.concept_id=1125,o.value_coded,null)) as abdominal_pain,
     max(if(o.concept_id=122943,o.value_coded,null)) as general_weakness,
+    max(if(o.concept_id=162737,o.value_coded,null)) as sore_throat,
 
-    max(if(o.concept_id=163741,o.value_coded,null)) as sore_throat,
+    -- max(if(o.concept_id=163741,o.value_coded,null)) as sore_throat,
     max(if(o.concept_id=164441,o.value_coded,null)) as breathing_difficulty,
     max(if(o.concept_id=122983,o.value_coded,null)) as nausea_vomiting,
 
@@ -594,7 +556,6 @@ select
     max(if(o.concept_id=1169,o.value_coded,null)) as hiv_status,
     max(if(o.concept_id=162309,o.value_coded,null)) as in_tb_program,
     max(if(o.concept_id=5272,o.value_coded,null)) as pregnant,
-
     max(if(o.concept_id=163100,o.value_coded,null)) as vaccinated_for_covid,
     max(if(o.concept_id=164134,o.value_coded,null)) as covid_vaccination_status,
     max(if(o.concept_id=165852,o.value_coded,null)) as ever_tested_for_covid,
@@ -612,7 +573,7 @@ from migration_st.encounter e
     ) f on f.form_id=e.form_id
     left outer join migration_st.obs o on o.encounter_id=e.encounter_id and o.voided=0
     and o.concept_id in (159948,1730,1729,140238,122943,143264,163741,163336,164441,142412,122983,5219,6023,160388,
-    1123,1125,160687,1838,160632,5272,162619,162633,164918,1169,162309,163100,164134,159948,165163,165087,1710,161011)
+    1123,1125,160687,1838,160632,5272,162619,162633,164918,1169,162309,163100,164134,159948,165163,165087,1710,161011,162737,165852)
 where e.voided=0
 group by e.patient_id, e.encounter_id;
 
@@ -650,7 +611,7 @@ insert into migration_tr.migration_etl_cca_covid_rdt_test(
 select
     e.uuid,
     e.patient_id Person_Id,
-    e.encounter_id as encounter_id,
+    null as encounter_id,
     e.visit_id as visit_id,
     NULL,
     e.location_id,
@@ -733,7 +694,7 @@ insert into migration_tr.migration_etl_cca_covid_clinical_review(
 select
     e.uuid,
     e.patient_id Person_Id,
-    e.encounter_id as Encounter_ID,
+    null as Encounter_ID,
     e.visit_id as visit_id,
     null,
     e.location_id,
@@ -805,7 +766,7 @@ insert into migration_tr.migration_etl_cca_covid_treatment_enrollment(
 select
     e.uuid,
     e.patient_id Person_Id,
-    e.encounter_id as Encounter_ID,
+    null as Encounter_ID,
     e.visit_id as visit_id,
     e.patient_id,
     e.location_id,
@@ -850,7 +811,7 @@ insert into migration_tr.migration_etl_cca_covid_treatment_enrollment_outcome(
 select
     e.uuid,
     e.patient_id Person_Id,
-    e.encounter_id as Encounter_ID,
+    null as Encounter_ID,
     e.visit_id as visit_id,
     e.patient_id,
     e.location_id,
@@ -895,13 +856,21 @@ insert into migration_tr.migration_etl_cca_covid_treatment_followup (
     case_classification,
     patient_admitted,
     admission_unit,
+    treatment_azithromycin,
+    treatment_amoxicillin_clavulanic,
+    treatment_amoxicillin,
+    treatment_tocilizumab,
+    treatment_dexamethasone,
+    treatment_multivitamin,
+    treatment_oxygen,
+    treatment_other,
     treatment_received,
     voided
 )
 select
     e.uuid,
     e.patient_id Person_Id,
-    e.encounter_id as Encounter_ID,
+    null as Encounter_ID,
     e.visit_id as visit_id,
     e.patient_id,
     e.location_id,
@@ -920,7 +889,19 @@ select
     max(if(o.concept_id=159640,o.value_coded,null)) as case_classification,
     max(if(o.concept_id=162477,o.value_coded,null)) as patient_admitted,
     max(if(o.concept_id=161010,o.value_coded,null)) as admission_unit,
-    group_concat(if(o.concept_id=159369,o.value_coded,null)) as treatment_received,  e.voided as voided
+    -- -------------------
+    max(if(o.concept_id=159369 and o.value_coded=71780,o.value_coded,null)) as treatment_azithromycin,
+    max(if(o.concept_id=159369 and o.value_coded=450,o.value_coded,null)) as treatment_amoxicillin_clavulanic,
+    max(if(o.concept_id=159369 and o.value_coded=71160,o.value_coded,null)) as treatment_amoxicillin,
+    max(if(o.concept_id=159369 and o.value_coded=165872,o.value_coded,null)) as treatment_tocilizumab,
+
+    max(if(o.concept_id=159369 and o.value_coded=74609,o.value_coded,null)) as treatment_dexamethasone,
+    max(if(o.concept_id=159369 and o.value_coded=461,o.value_coded,null)) as treatment_multivitamin,
+    max(if(o.concept_id=159369 and o.value_coded=81341,o.value_coded,null)) as treatment_oxygen,
+    max(if(o.concept_id=159369 and o.value_coded=5622,o.value_coded,null)) as treatment_other,
+    -- --------------
+    group_concat(if(o.concept_id=159369,o.value_coded,null)) as treatment_received,
+    e.voided as voided
 from migration_st.encounter e
     inner join migration_st.person p on p.person_id=e.patient_id and p.voided=0
     inner join
