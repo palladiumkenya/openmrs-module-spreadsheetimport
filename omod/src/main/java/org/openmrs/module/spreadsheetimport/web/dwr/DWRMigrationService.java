@@ -56,7 +56,7 @@ public class DWRMigrationService {
 		DbImportUtil.processPatientRelationships(messages, migrationDatabase);
 		DbImportUtil.processPatientContactLists(messages, migrationDatabase);*/
 		//DbImportUtil.processHeiImmunizations(messages, migrationDatabase);
-		DbImportUtil.updateEncounterLocation(messages, migrationDatabase);
+		//DbImportUtil.updateEncounterLocation(messages, migrationDatabase);
 
 		long endTime = System.nanoTime();
 		long timeTaken = endTime - startTime;

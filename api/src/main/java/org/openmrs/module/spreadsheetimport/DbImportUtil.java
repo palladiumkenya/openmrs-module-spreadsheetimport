@@ -370,10 +370,16 @@ public class DbImportUtil {
                 String rowDateCreated = null;
                 Integer rowCreator = null;
                 Integer rPersonId = null;
+                String locationId = null;
+
                 int encDateColumnIdx = columnNames.indexOf(encounterDateColumn);
                 int creatorColumnIdx = columnNames.indexOf(creatorColumn);
                 int dateCreatedColumnIdx = columnNames.indexOf(dateCreatedColumn);
+                int locationIdColumnIdx = columnNames.indexOf("location_id");
 
+                if (locationIdColumnIdx >= 0) {
+                    locationId = rs.getString("location_id");
+                }
 
                 if (encDateColumnIdx >= 0) {
                     if (rs.getDate(encounterDateColumn) != null) {
@@ -594,7 +600,7 @@ public class DbImportUtil {
                     Exception exception = null;
                     try {
                         //DatabaseBackend.validateData(rowData);
-                        String encounterId = DatabaseBackend.importData(rowData, rowEncDate, patientId, repeatingList, rollbackTransaction, conn, rowCreator, rowDateCreated);
+                        String encounterId = DatabaseBackend.importData(rowData, rowEncDate, locationId, patientId, repeatingList, rollbackTransaction, conn, rowCreator, rowDateCreated);
 
 
                     /*if (recordCount == 1) {

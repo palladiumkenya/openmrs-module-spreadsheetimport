@@ -335,7 +335,7 @@ public class DatabaseBackend {
     }
 
     public static String importData(Map<UniqueImport, Set<SpreadsheetImportTemplateColumn>> rowData,
-                                    String encounterDate, String patientId, List<GroupedObservations> groupedObservations,
+                                    String encounterDate, String locationId, String patientId, List<GroupedObservations> groupedObservations,
                                     boolean rollbackTransaction, Connection conn, Integer creator, String dateCreated) throws Exception {
         //Connection conn = null;
         Statement s = null;
@@ -537,7 +537,7 @@ public class DatabaseBackend {
                         // inject date_created
                         columnNames += "date_created";
                         //columnValues += "now()";
-                        columnValues += "'" + dateCreated + "'";;
+                        columnValues += "'" + dateCreated + "'";
 
                         // find encounter_datetime based on observation date time
                         java.sql.Date encounterDatetime = new java.sql.Date(System.currentTimeMillis());
@@ -628,13 +628,21 @@ public class DatabaseBackend {
                         columnNames += "person_id";
                         columnValues += patientId;
 
+                    } else if (columnPrespecifiedValue.getColumnName() != null && columnPrespecifiedValue.getColumnName().equals("location_id")) {
+                        columnNames += "location_id";
+                        columnValues += locationId;
+
                     } else {
                         columnNames += columnPrespecifiedValue.getColumnName();
                         columnValues += columnPrespecifiedValue.getPrespecifiedValue().getValue();
                     }
 
                 }
-
+                /*if (columnName.equalsIgnoreCase("location_id") *//*&& StringUtils.isNotBlank(locationId)*//*) {
+                    columnValues += 12032; //we want to provision this outside of the template for external management.
+                } else {
+                    columnValues += mapPrimaryKeyColumnNameToGeneratedKey.get(columnName);
+                }*/
                 // Data from columns import before
                 if (!columnColumnsImportBefore.isEmpty()) {
 
@@ -675,6 +683,7 @@ public class DatabaseBackend {
 
                     // Add columns
                     for (String columnName : mapPrimaryKeyColumnNameToGeneratedKey.keySet()) {
+
                         if (isFirst)
                             isFirst = false;
                         else {
@@ -683,7 +692,6 @@ public class DatabaseBackend {
                         }
                         columnNames += columnName;
                         columnValues += mapPrimaryKeyColumnNameToGeneratedKey.get(columnName);
-
                     }
 
                 }
