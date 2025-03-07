@@ -8,7 +8,7 @@
 	</parent>
 	
 	<groupId>org.openmrs.module</groupId>
-	<artifactId>spreadsheetimport</artifactId>
+	<artifactId>spreadsheetimport-omod</artifactId>
 	<packaging>omod</packaging>
 	<name>Spreadsheet Import Module OMOD</name>
 	<description>OpenMRS module project for Spreadsheet Import Module</description>
