@@ -25,9 +25,9 @@ jobs:
         run: mvn -B clean install -DskipTests
 
   publish:
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
     needs: build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
